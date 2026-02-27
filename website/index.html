@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAD Timer — GPS Race Timing App</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 32px;
+    }
+    .brand { margin-bottom: 48px; }
+    .brand h1 {
+      font-size: 72px;
+      font-weight: 900;
+      color: #FF4500;
+      letter-spacing: 8px;
+    }
+    .brand h2 {
+      font-size: 36px;
+      font-weight: 300;
+      letter-spacing: 16px;
+      margin-top: -4px;
+    }
+    .tagline {
+      font-size: 18px;
+      color: #9ca3af;
+      margin-top: 16px;
+      letter-spacing: 2px;
+    }
+    .description {
+      max-width: 500px;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #d1d5db;
+      margin-bottom: 48px;
+    }
+    .badges { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .badge {
+      display: inline-block;
+      background: #FF4500;
+      color: #fff;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .badge:hover { background: #cc3700; }
+    .badge.secondary {
+      background: transparent;
+      border: 2px solid #FF4500;
+    }
+    .badge.secondary:hover { background: rgba(255, 69, 0, 0.15); }
+    footer {
+      margin-top: 64px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <h1>RAD</h1>
+    <h2>TIMER</h2>
+  </div>
+  <p class="tagline">GPS RACE TIMING</p>
+  <p class="description">
+    Create a race, share a QR code, and let anyone track their run. 
+    GPS-based timing with automatic start/finish detection. 
+    No accounts required.
+  </p>
+  <div class="badges">
+    <a href="#" class="badge">Download on App Store</a>
+    <a href="#" class="badge secondary">Get it on Google Play</a>
+  </div>
+  <footer>&copy; 2026 RAD Timer. All rights reserved.</footer>
+</body>
+</html>

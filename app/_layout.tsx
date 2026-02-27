@@ -1,0 +1,52 @@
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { Colors } from '../utils/colors';
+
+export default function RootLayout() {
+  return (
+    <>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: Colors.secondary },
+          headerTintColor: Colors.textOnSecondary,
+          headerTitleStyle: { fontWeight: '700' },
+          contentStyle: { backgroundColor: Colors.background },
+        }}
+      >
+        <Stack.Screen
+          name="index"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="director/name-race"
+          options={{ title: 'Create Race' }}
+        />
+        <Stack.Screen
+          name="director/mark-course"
+          options={{ title: 'Mark Course' }}
+        />
+        <Stack.Screen
+          name="racer/scan"
+          options={{ title: 'Scan QR Code' }}
+        />
+        <Stack.Screen
+          name="racer/enter-name"
+          options={{ title: 'Join Race' }}
+        />
+        <Stack.Screen
+          name="race/[id]/invite"
+          options={{ title: 'Share Race' }}
+        />
+        <Stack.Screen
+          name="race/[id]/record"
+          options={{ title: 'Race', headerBackVisible: false }}
+        />
+        <Stack.Screen
+          name="race/[id]/leaderboard"
+          options={{ title: 'Leaderboard' }}
+        />
+      </Stack>
+    </>
+  );
+}

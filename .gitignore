@@ -1,0 +1,28 @@
+node_modules/
+.expo/
+dist/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Backend
+backend/dist/
+backend/node_modules/
+backend/.esbuild/
+backend/.serverless/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store

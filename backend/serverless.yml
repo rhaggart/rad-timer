@@ -1,0 +1,136 @@
+service: rad-timer-api
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+custom:
+  tableSessions: RadTimerRaceSessions
+  tableResults: RadTimerResults
+  tracksBucket: radtimer-gps-tracks-${sls:stage}
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node20
+    platform: node
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 15
+  environment:
+    TABLE_SESSIONS: ${self:custom.tableSessions}
+    TABLE_RESULTS: ${self:custom.tableResults}
+    TRACKS_BUCKET: ${self:custom.tracksBucket}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.tableSessions}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.tableResults}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.tableResults}/index/*
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::${self:custom.tracksBucket}/*
+  httpApi:
+    cors:
+      allowedOrigins:
+        - https://radtimer.com
+        - '*'
+      allowedMethods:
+        - GET
+        - POST
+        - OPTIONS
+      allowedHeaders:
+        - Content-Type
+
+functions:
+  createRace:
+    handler: src/handlers/createRace.handler
+    events:
+      - httpApi:
+          path: /races
+          method: POST
+
+  getRace:
+    handler: src/handlers/getRace.handler
+    events:
+      - httpApi:
+          path: /races/{id}
+          method: GET
+
+  uploadTrack:
+    handler: src/handlers/uploadTrack.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /races/{id}/upload
+          method: POST
+
+  getLeaderboard:
+    handler: src/handlers/getLeaderboard.handler
+    events:
+      - httpApi:
+          path: /races/{id}/leaderboard
+          method: GET
+
+resources:
+  Resources:
+    RaceSessionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tableSessions}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: raceId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: raceId
+            KeyType: HASH
+
+    ResultsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tableResults}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: raceId
+            AttributeType: S
+          - AttributeName: resultId
+            AttributeType: S
+          - AttributeName: elapsedTime
+            AttributeType: N
+        KeySchema:
+          - AttributeName: raceId
+            KeyType: HASH
+          - AttributeName: resultId
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: raceId-elapsedTime-index
+            KeySchema:
+              - AttributeName: raceId
+                KeyType: HASH
+              - AttributeName: elapsedTime
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    TracksBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.tracksBucket}

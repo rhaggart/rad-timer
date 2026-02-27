@@ -1,0 +1,25 @@
+{
+  "name": "rad-timer-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npx serverless deploy --region us-west-2",
+    "deploy:prod": "npx serverless deploy --stage prod --region us-west-2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/client-s3": "^3",
+    "@aws-sdk/lib-dynamodb": "^3",
+    "@turf/turf": "^7",
+    "uuid": "^11"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8",
+    "@types/uuid": "^10",
+    "esbuild": "^0.27.3",
+    "serverless": "^3.40.0",
+    "serverless-esbuild": "^1",
+    "typescript": "~5.9.2"
+  }
+}

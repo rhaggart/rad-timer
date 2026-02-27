@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "RAD Timer",
+    "slug": "rad-timer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "radtimer",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.radtimer.app",
+      "associatedDomains": ["applinks:radtimer.com"],
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "RAD Timer needs your location to record your race track.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "RAD Timer needs background location access to record your race track while the app is in the background.",
+        "NSCameraUsageDescription": "RAD Timer needs camera access to scan race QR codes.",
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "android": {
+      "package": "com.radtimer.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1a2e",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "radtimer.com",
+              "pathPrefix": "/join"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "RAD Timer needs background location to record your race track."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "RAD Timer needs camera access to scan race QR codes."
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "https://api.radtimer.com",
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
