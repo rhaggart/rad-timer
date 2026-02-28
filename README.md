@@ -35,11 +35,17 @@ npx serverless deploy --region us-west-2
 | POST | /races/{id}/upload | Upload GPS track |
 | GET | /races/{id}/leaderboard | Get sorted results |
 
-## DNS Records Required
+## Infrastructure
 
-| Type | Name | Value |
-|------|------|-------|
-| CNAME | `_69b1e643a3dd6c67233ed6fc40454d58.radtimer.com` | `_e162d42f5c9411f0e5bcd15d3ffcb13b.jkddzztszm.acm-validations.aws.` |
-| CNAME | `_56f041f1a74f2dc7dfa9f4742f860f6a.api.radtimer.com` | `_3579c581f32fba4cd778c797046eece5.jkddzztszm.acm-validations.aws.` |
-| A/ALIAS | `radtimer.com` | `d3m6tk6ljjlwzt.cloudfront.net` |
-| CNAME | `api.radtimer.com` | (API Gateway custom domain - set up after cert validates) |
+DNS is managed via AWS Route 53 (hosted zone `Z02956751W1LYFYLKLXID`).
+
+| Domain | Service |
+|--------|---------|
+| `radtimer.com` | CloudFront (`E35GFF9OSJTPGS`) -> S3 static site |
+| `api.radtimer.com` | API Gateway (`x0ioz5uedl`) -> Lambda functions |
+
+Nameservers (set at registrar):
+- `ns-1143.awsdns-14.org`
+- `ns-413.awsdns-51.com`
+- `ns-572.awsdns-07.net`
+- `ns-1573.awsdns-04.co.uk`
