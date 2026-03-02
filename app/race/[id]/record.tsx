@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../../utils/colors';
@@ -55,6 +56,13 @@ export default function RecordScreen() {
 
   return (
     <View style={styles.container}>
+      <Pressable
+        style={styles.returnButton}
+        onPress={() => router.replace('/')}
+      >
+        <Text style={styles.returnButtonText}>← Return to Home</Text>
+      </Pressable>
+
       <View style={styles.header}>
         <Text style={styles.raceName}>{raceName}</Text>
         <Text style={styles.playerName}>{participantName}</Text>
@@ -80,6 +88,12 @@ export default function RecordScreen() {
       {error && (
         <View style={styles.errorCard}>
           <Text style={styles.errorText}>{error}</Text>
+          <Pressable
+            style={styles.settingsLink}
+            onPress={() => Linking.openSettings()}
+          >
+            <Text style={styles.settingsLinkText}>Open Settings to turn on location</Text>
+          </Pressable>
         </View>
       )}
 
@@ -189,6 +203,28 @@ const styles = StyleSheet.create({
     color: Colors.error,
     fontSize: 14,
     textAlign: 'center',
+  },
+  settingsLink: {
+    marginTop: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  settingsLinkText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.primary,
+    textDecorationLine: 'underline',
+  },
+  returnButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    marginBottom: 8,
+  },
+  returnButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   actions: {
     marginTop: 'auto',

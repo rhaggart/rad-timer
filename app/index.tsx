@@ -29,7 +29,7 @@ export default function HomeScreen() {
             style={[styles.button, styles.racerButton]}
             onPress={() => router.push('/racer/scan')}
           >
-            <Text style={styles.buttonIcon}>🏃</Text>
+            <Text style={styles.buttonIcon}>🚴</Text>
             <Text style={styles.buttonText}>Racer</Text>
             <Text style={styles.buttonHint}>Scan a QR code to join</Text>
           </Pressable>
