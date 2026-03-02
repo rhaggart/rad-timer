@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,19 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Colors } from '../../utils/colors';
 import { api } from '../../services/api';
+
+function formatCoord(value: number, type: 'lat' | 'lng'): string {
+  const deg = Math.abs(value).toFixed(5);
+  const dir = type === 'lat' ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W';
+  return `${deg}° ${dir}`;
+}
 
 export default function MarkCourseScreen() {
   const router = useRouter();
@@ -20,7 +27,12 @@ export default function MarkCourseScreen() {
     expiryHours: string;
   }>();
 
+  const mapRef = useRef<MapView>(null);
   const [region, setRegion] = useState<Region | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [startCoords, setStartCoords] = useState<{
     lat: number;
     lng: number;
@@ -31,25 +43,54 @@ export default function MarkCourseScreen() {
   } | null>(null);
   const [creating, setCreating] = useState(false);
 
+  // Initial region + live GPS updates
   useEffect(() => {
+    let subscription: Location.LocationSubscription | null = null;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
 
-      const loc = await Location.getCurrentPositionAsync({});
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+      });
       const { latitude, longitude } = loc.coords;
 
       setRegion({
         latitude,
         longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
       });
+      setCurrentLocation({ lat: latitude, lng: longitude });
 
-      setStartCoords({ lat: latitude - 0.001, lng: longitude });
-      setFinishCoords({ lat: latitude + 0.001, lng: longitude });
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 2000,
+          distanceInterval: 5,
+        },
+        (location) => {
+          setCurrentLocation({
+            lat: location.coords.latitude,
+            lng: location.coords.longitude,
+          });
+        }
+      );
     })();
+
+    return () => {
+      subscription?.remove();
+    };
   }, []);
+
+  const captureStart = () => {
+    if (currentLocation) setStartCoords({ ...currentLocation });
+  };
+
+  const captureFinish = () => {
+    if (currentLocation) setFinishCoords({ ...currentLocation });
+  };
 
   const canCreate = startCoords && finishCoords;
 
@@ -86,18 +127,25 @@ export default function MarkCourseScreen() {
     );
   }
 
+  // Terrain/topo: Android has "terrain"; iOS uses "hybrid" (satellite + labels) for outdoor
+  const mapType = Platform.OS === 'android' ? 'terrain' : 'hybrid';
+
   return (
     <View style={styles.container}>
       <View style={styles.instructions}>
         <Text style={styles.instructionText}>
-          Drag the pins to set the start and finish lines
+          Move to each spot, then tap Create Start and Create Finish
         </Text>
       </View>
 
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={region}
         showsUserLocation
+        showsMyLocationButton
+        mapType={mapType}
+        followsUserLocation
       >
         {startCoords && (
           <Marker
@@ -105,13 +153,6 @@ export default function MarkCourseScreen() {
               latitude: startCoords.lat,
               longitude: startCoords.lng,
             }}
-            draggable
-            onDragEnd={(e) =>
-              setStartCoords({
-                lat: e.nativeEvent.coordinate.latitude,
-                lng: e.nativeEvent.coordinate.longitude,
-              })
-            }
             pinColor={Colors.startGreen}
             title="Start"
           />
@@ -122,28 +163,63 @@ export default function MarkCourseScreen() {
               latitude: finishCoords.lat,
               longitude: finishCoords.lng,
             }}
-            draggable
-            onDragEnd={(e) =>
-              setFinishCoords({
-                lat: e.nativeEvent.coordinate.latitude,
-                lng: e.nativeEvent.coordinate.longitude,
-              })
-            }
             pinColor={Colors.finishRed}
             title="Finish"
           />
         )}
       </MapView>
 
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: Colors.startGreen }]} />
-          <Text style={styles.legendLabel}>Start</Text>
+      {/* Live GPS coordinates */}
+      <View style={styles.coordOverlay}>
+        <Text style={styles.coordTitle}>Your location</Text>
+        {currentLocation ? (
+          <Text style={styles.coordText} numberOfLines={1}>
+            {formatCoord(currentLocation.lat, 'lat')}, {formatCoord(currentLocation.lng, 'lng')}
+          </Text>
+        ) : (
+          <Text style={styles.coordText}>—</Text>
+        )}
+      </View>
+
+      {/* Start / Finish coordinates when set */}
+      {(startCoords || finishCoords) && (
+        <View style={styles.capturedOverlay}>
+          {startCoords && (
+            <View style={styles.capturedRow}>
+              <View style={[styles.capturedDot, { backgroundColor: Colors.startGreen }]} />
+              <Text style={styles.capturedLabel}>Start: </Text>
+              <Text style={styles.capturedCoords} numberOfLines={1}>
+                {formatCoord(startCoords.lat, 'lat')}, {formatCoord(startCoords.lng, 'lng')}
+              </Text>
+            </View>
+          )}
+          {finishCoords && (
+            <View style={styles.capturedRow}>
+              <View style={[styles.capturedDot, { backgroundColor: Colors.finishRed }]} />
+              <Text style={styles.capturedLabel}>Finish: </Text>
+              <Text style={styles.capturedCoords} numberOfLines={1}>
+                {formatCoord(finishCoords.lat, 'lat')}, {formatCoord(finishCoords.lng, 'lng')}
+              </Text>
+            </View>
+          )}
         </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: Colors.finishRed }]} />
-          <Text style={styles.legendLabel}>Finish</Text>
-        </View>
+      )}
+
+      <View style={styles.buttons}>
+        <Pressable
+          style={[styles.captureButton, styles.startButton]}
+          onPress={captureStart}
+          disabled={!currentLocation}
+        >
+          <Text style={styles.captureButtonText}>Create Start</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.captureButton, styles.finishButton]}
+          onPress={captureFinish}
+          disabled={!currentLocation}
+        >
+          <Text style={styles.captureButtonText}>Create Finish</Text>
+        </Pressable>
       </View>
 
       <View style={styles.footer}>
@@ -194,29 +270,83 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  legend: {
+  coordOverlay: {
     position: 'absolute',
     top: 56,
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  coordTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  coordText: {
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    color: '#fff',
+  },
+  capturedOverlay: {
+    position: 'absolute',
+    top: 120,
+    left: 12,
     right: 12,
     backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 8,
     padding: 10,
     gap: 6,
   },
-  legendItem: {
+  capturedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  capturedDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  legendLabel: {
-    fontSize: 13,
+  capturedLabel: {
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.text,
+  },
+  capturedCoords: {
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    color: Colors.textLight,
+    flex: 1,
+  },
+  buttons: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: Colors.background,
+  },
+  captureButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  startButton: {
+    backgroundColor: Colors.startGreen,
+  },
+  finishButton: {
+    backgroundColor: Colors.finishRed,
+  },
+  captureButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textOnPrimary,
   },
   footer: {
     padding: 16,

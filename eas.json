@@ -15,12 +15,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "",
-        "ascAppId": "",
-        "appleTeamId": ""
-      },
-      "android": {
-        "serviceAccountKeyPath": ""
+        "appleId": "rob@photofolio.com",
+        "appleTeamId": "94YTYKZH4N",
+        "ascAppId": "6759878128"
       }
     }
   }

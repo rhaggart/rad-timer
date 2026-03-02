@@ -49,3 +49,22 @@ Nameservers (set at registrar):
 - `ns-413.awsdns-51.com`
 - `ns-572.awsdns-07.net`
 - `ns-1573.awsdns-04.co.uk`
+
+## App store submission
+
+**iOS** (credentials in EAS + Apple Team ID in `eas.json`):
+
+```bash
+eas build --platform ios --profile production
+eas submit --platform ios --latest --profile production
+```
+
+**Android** (Google Service Account key uploaded in [EAS Credentials](https://expo.dev/accounts/radtimer/projects/rad-timer/credentials)):
+
+1. After Play Console identity verification completes: **Setup → API access** → find your service account → **Grant access** (release role).
+2. First release must be uploaded manually in Play Console (create release, upload the AAB from the latest EAS build).
+3. Later releases:
+   ```bash
+   eas build --platform android --profile production
+   eas submit --platform android --latest --profile production
+   ```

@@ -15,12 +15,17 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.radtimer.app",
-      "associatedDomains": ["applinks:radtimer.com"],
+      "associatedDomains": [
+        "applinks:radtimer.com"
+      ],
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "RAD Timer needs your location to record your race track.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "RAD Timer needs background location access to record your race track while the app is in the background.",
         "NSCameraUsageDescription": "RAD Timer needs camera access to scan race QR codes.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -35,7 +40,11 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "CAMERA"
+        "CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
@@ -48,7 +57,10 @@
               "pathPrefix": "/join"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -73,8 +85,10 @@
     "extra": {
       "apiUrl": "https://api.radtimer.com",
       "eas": {
-        "projectId": ""
-      }
-    }
+        "projectId": "0294729e-6380-486b-8f98-8bf6abeb0608"
+      },
+      "router": {}
+    },
+    "owner": "radtimer"
   }
 }
