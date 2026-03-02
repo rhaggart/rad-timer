@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.radtimer.app",
+      "buildNumber": "2",
       "associatedDomains": [
         "applinks:radtimer.com"
       ],
