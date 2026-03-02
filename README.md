@@ -50,6 +50,15 @@ Nameservers (set at registrar):
 - `ns-572.awsdns-07.net`
 - `ns-1573.awsdns-04.co.uk`
 
+## CI: EAS build on push
+
+Pushing to `master` triggers a GitHub Action that runs `eas build --platform all --profile production`. To enable it:
+
+1. In [Expo](https://expo.dev/accounts/radtimer/settings/access-tokens), create a **Personal Access Token**.
+2. In GitHub: repo **Settings → Secrets and variables → Actions** → **New repository secret** → name `EXPO_TOKEN`, value = the token.
+
+After that, every push to `master` queues iOS and Android production builds on EAS.
+
 ## App store submission
 
 **iOS** (credentials in EAS + Apple Team ID in `eas.json`):
