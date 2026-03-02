@@ -33,6 +33,13 @@ export default function HomeScreen() {
             <Text style={styles.buttonText}>Racer</Text>
             <Text style={styles.buttonHint}>Scan a QR code to join</Text>
           </Pressable>
+
+          <Pressable
+            style={styles.activeRacesLink}
+            onPress={() => router.push('/director/races')}
+          >
+            <Text style={styles.activeRacesLinkText}>Active races</Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -103,5 +110,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.7)',
     marginTop: 4,
+  },
+  activeRacesLink: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  activeRacesLinkText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });

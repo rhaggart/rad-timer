@@ -11,6 +11,14 @@ interface Coords {
   lng: number;
 }
 
+/** Line segment as two points (lat/lng). */
+export interface LineSegment {
+  lat1: number;
+  lng1: number;
+  lat2: number;
+  lng2: number;
+}
+
 interface CrossingResult {
   startTime: number;
   finishTime: number;
@@ -19,12 +27,13 @@ interface CrossingResult {
 
 const CORRIDOR_METERS = 15;
 
+type LineStringFeature = ReturnType<typeof turf.lineString>;
+
 /**
  * Build a short perpendicular line segment centered on a point.
- * We create a line perpendicular to north (bearing 90/270) by default.
- * In a more advanced version, we'd infer bearing from the track direction.
+ * Used when only startCoords/finishCoords (single point) is provided.
  */
-function buildGateLine(center: Coords): turf.Feature<turf.LineString> {
+function buildGateLine(center: Coords): LineStringFeature {
   const point = turf.point([center.lng, center.lat]);
   const left = turf.destination(point, CORRIDOR_METERS / 1000, 270, {
     units: 'kilometers',
@@ -39,13 +48,21 @@ function buildGateLine(center: Coords): turf.Feature<turf.LineString> {
 }
 
 /**
+ * Build a line from an explicit segment (two endpoints).
+ */
+function segmentToLine(seg: LineSegment): LineStringFeature {
+  return turf.lineString([
+    [seg.lng1, seg.lat1],
+    [seg.lng2, seg.lat2],
+  ]);
+}
+
+/**
  * Find the interpolated timestamp when the track crosses a gate line.
- * Iterates consecutive GPS point pairs and checks for line intersection.
- * Returns the interpolated timestamp of the crossing, or null.
  */
 function findCrossingTime(
   points: GPSPoint[],
-  gateLine: turf.Feature<turf.LineString>,
+  gateLine: LineStringFeature,
   startIndex = 0,
 ): { timestamp: number; index: number } | null {
   for (let i = startIndex; i < points.length - 1; i++) {
@@ -79,17 +96,27 @@ function findCrossingTime(
   return null;
 }
 
+/** Race gate definition: either a single point (legacy) or an explicit line segment. */
+export type StartFinishInput =
+  | { coords: Coords }
+  | { line: LineSegment };
+
+function toGateLine(input: StartFinishInput): LineStringFeature {
+  if ('line' in input) return segmentToLine(input.line);
+  return buildGateLine(input.coords);
+}
+
 export function detectCrossings(
   points: GPSPoint[],
-  startCoords: Coords,
-  finishCoords: Coords,
+  start: StartFinishInput,
+  finish: StartFinishInput,
 ): CrossingResult {
   if (points.length < 2) {
     throw new Error('Track must contain at least 2 GPS points');
   }
 
-  const startGate = buildGateLine(startCoords);
-  const finishGate = buildGateLine(finishCoords);
+  const startGate = toGateLine(start);
+  const finishGate = toGateLine(finish);
 
   const startCrossing = findCrossingTime(points, startGate);
   if (!startCrossing) {

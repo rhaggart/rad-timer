@@ -7,6 +7,8 @@ import {
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
+  TouchableWithoutFeedback,
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -53,7 +55,8 @@ export default function EnterNameScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.content}>
         <View style={styles.raceInfo}>
           <Text style={styles.raceLabel}>RACE</Text>
           <Text style={styles.raceName}>{race?.name ?? 'Unknown Race'}</Text>
@@ -87,7 +90,8 @@ export default function EnterNameScreen() {
         >
           <Text style={styles.buttonText}>Ready to Race</Text>
         </Pressable>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }

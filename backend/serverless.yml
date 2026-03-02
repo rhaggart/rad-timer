@@ -35,6 +35,9 @@ provider:
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:DeleteItem
+            - dynamodb:BatchWriteItem
             - dynamodb:UpdateItem
           Resource:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.tableSessions}
@@ -44,7 +47,10 @@ provider:
           Action:
             - s3:PutObject
             - s3:GetObject
+            - s3:ListBucket
+            - s3:DeleteObject
           Resource:
+            - arn:aws:s3:::${self:custom.tracksBucket}
             - arn:aws:s3:::${self:custom.tracksBucket}/*
   httpApi:
     cors:
@@ -54,6 +60,7 @@ provider:
       allowedMethods:
         - GET
         - POST
+        - DELETE
         - OPTIONS
       allowedHeaders:
         - Content-Type
@@ -66,6 +73,13 @@ functions:
           path: /races
           method: POST
 
+  listRaces:
+    handler: src/handlers/listRaces.handler
+    events:
+      - httpApi:
+          path: /races
+          method: GET
+
   getRace:
     handler: src/handlers/getRace.handler
     events:
@@ -75,7 +89,7 @@ functions:
 
   uploadTrack:
     handler: src/handlers/uploadTrack.handler
-    timeout: 30
+    timeout: 29
     memorySize: 512
     events:
       - httpApi:
@@ -88,6 +102,13 @@ functions:
       - httpApi:
           path: /races/{id}/leaderboard
           method: GET
+
+  deleteRace:
+    handler: src/handlers/deleteRace.handler
+    events:
+      - httpApi:
+          path: /races/{id}
+          method: DELETE
 
 resources:
   Resources:

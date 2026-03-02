@@ -93,6 +93,9 @@ export default function LeaderboardScreen() {
           </Text>
         </View>
       </View>
+      <Text style={styles.resultsKeptNote}>
+        Results are kept for 24 hours.
+      </Text>
 
       <FlatList
         data={entries}
@@ -202,6 +205,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textOnPrimary,
     letterSpacing: 1,
+  },
+  resultsKeptNote: {
+    fontSize: 12,
+    color: Colors.textLight,
+    textAlign: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   list: {
     padding: 16,

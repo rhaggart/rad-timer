@@ -6,6 +6,8 @@ import {
   StyleSheet,
   Pressable,
   KeyboardAvoidingView,
+  Keyboard,
+  TouchableWithoutFeedback,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -14,7 +16,7 @@ import { Colors } from '../../utils/colors';
 export default function NameRaceScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [expiryHours, setExpiryHours] = useState('4');
+  const [durationHours, setDurationHours] = useState('1');
 
   const canProceed = name.trim().length > 0;
 
@@ -23,7 +25,22 @@ export default function NameRaceScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.content}>
+        <View style={styles.topRow}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </Pressable>
+          <Pressable
+            style={styles.activeRacesButton}
+            onPress={() => router.push('/director/races')}
+          >
+            <Text style={styles.activeRacesButtonText}>Active races</Text>
+          </Pressable>
+        </View>
         <Text style={styles.label}>Race Name</Text>
         <TextInput
           style={styles.input}
@@ -36,25 +53,30 @@ export default function NameRaceScreen() {
         />
 
         <Text style={[styles.label, { marginTop: 24 }]}>
-          Race Duration (hours)
+          Submissions close after
         </Text>
         <View style={styles.expiryRow}>
-          {['2', '4', '8', '24'].map((h) => (
+          {[
+            { value: '0.5', label: '30 min' },
+            { value: '1', label: '1 h' },
+            { value: '2', label: '2 h' },
+            { value: '24', label: '24 h' },
+          ].map(({ value, label }) => (
             <Pressable
-              key={h}
+              key={value}
               style={[
                 styles.expiryChip,
-                expiryHours === h && styles.expiryChipActive,
+                durationHours === value && styles.expiryChipActive,
               ]}
-              onPress={() => setExpiryHours(h)}
+              onPress={() => setDurationHours(value)}
             >
               <Text
                 style={[
                   styles.expiryChipText,
-                  expiryHours === h && styles.expiryChipTextActive,
+                  durationHours === value && styles.expiryChipTextActive,
                 ]}
               >
-                {h}h
+                {label}
               </Text>
             </Pressable>
           ))}
@@ -66,14 +88,15 @@ export default function NameRaceScreen() {
             canProceed &&
             router.push({
               pathname: '/director/mark-course',
-              params: { raceName: name.trim(), expiryHours },
+              params: { raceName: name.trim(), durationHours },
             })
           }
           disabled={!canProceed}
         >
           <Text style={styles.nextButtonText}>Next — Mark Course</Text>
         </Pressable>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
@@ -87,6 +110,34 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     paddingTop: 40,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  backButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  activeRacesButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  activeRacesButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   label: {
     fontSize: 14,
@@ -107,6 +158,7 @@ const styles = StyleSheet.create({
   },
   expiryRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   expiryChip: {

@@ -9,6 +9,7 @@ import {
   Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import QRCode from 'react-native-qrcode-svg';
 import { Colors } from '../../../utils/colors';
 import { useGPSRecording } from '../../../hooks/useGPSRecording';
 import { api } from '../../../services/api';
@@ -24,6 +25,7 @@ export default function RecordScreen() {
   const { state, points, pointCount, error, startRecording, stopRecording, reset } =
     useGPSRecording();
   const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const handleUpload = async () => {
     if (points.length < 2) {
@@ -32,15 +34,14 @@ export default function RecordScreen() {
     }
 
     setUploading(true);
+    setUploadSuccess(false);
     try {
       await api.uploadTrack(id!, {
         participantName: participantName ?? 'Unknown',
         points,
       });
-      router.replace({
-        pathname: '/race/[id]/leaderboard',
-        params: { id },
-      });
+      setUploadSuccess(true);
+      reset();
     } catch (err) {
       Alert.alert(
         'Upload Failed',
@@ -60,7 +61,7 @@ export default function RecordScreen() {
         style={styles.returnButton}
         onPress={() => router.replace('/')}
       >
-        <Text style={styles.returnButtonText}>← Return to Home</Text>
+        <Text style={styles.returnButtonText}>← Back</Text>
       </Pressable>
 
       <View style={styles.header}>
@@ -68,20 +69,29 @@ export default function RecordScreen() {
         <Text style={styles.playerName}>{participantName}</Text>
       </View>
 
+      {id && (
+        <View style={styles.qrSection}>
+          <Text style={styles.qrHint}>Share this race with others</Text>
+          <View style={styles.qrContainer}>
+            <QRCode
+              value={`https://radtimer.com/join/${id}`}
+              size={160}
+              backgroundColor="white"
+            />
+          </View>
+        </View>
+      )}
+
       <View style={styles.statusCard}>
         <Text style={styles.statusLabel}>
           {state === 'idle' && 'READY'}
-          {state === 'recording' && 'RECORDING'}
+          {state === 'recording' && 'TRACKING'}
           {state === 'stopped' && 'TRACK RECORDED'}
         </Text>
-        <Text style={styles.pointCount}>
-          {pointCount} GPS point{pointCount !== 1 ? 's' : ''}
-        </Text>
-        {state === 'recording' && (
-          <View style={styles.recordingIndicator}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Tracking your location...</Text>
-          </View>
+        {state === 'stopped' && (
+          <Text style={styles.pointCount}>
+            {pointCount} GPS point{pointCount !== 1 ? 's' : ''}
+          </Text>
         )}
       </View>
 
@@ -92,14 +102,26 @@ export default function RecordScreen() {
             style={styles.settingsLink}
             onPress={() => Linking.openSettings()}
           >
-            <Text style={styles.settingsLinkText}>Open Settings to turn on location</Text>
+            <Text style={styles.settingsLinkText}>Open Settings</Text>
           </Pressable>
+        </View>
+      )}
+
+      {uploadSuccess && (
+        <View style={styles.successCard}>
+          <Text style={styles.successText}>Uploaded! Tap Start Tracking to race again.</Text>
         </View>
       )}
 
       <View style={styles.actions}>
         {state === 'idle' && (
-          <Pressable style={styles.startButton} onPress={startRecording}>
+          <Pressable
+            style={styles.startButton}
+            onPress={() => {
+              setUploadSuccess(false);
+              startRecording();
+            }}
+          >
             <Text style={styles.buttonText}>Start Tracking</Text>
           </Pressable>
         )}
@@ -111,23 +133,17 @@ export default function RecordScreen() {
         )}
 
         {state === 'stopped' && (
-          <>
-            <Pressable
-              style={[styles.uploadButton, uploading && styles.buttonDisabled]}
-              onPress={handleUpload}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <ActivityIndicator color={Colors.textOnPrimary} />
-              ) : (
-                <Text style={styles.buttonText}>Upload Track for Results</Text>
-              )}
-            </Pressable>
-
-            <Pressable style={styles.retryButton} onPress={reset}>
-              <Text style={styles.retryButtonText}>Discard & Try Again</Text>
-            </Pressable>
-          </>
+          <Pressable
+            style={[styles.uploadButton, uploading && styles.buttonDisabled]}
+            onPress={handleUpload}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator color={Colors.textOnPrimary} />
+            ) : (
+              <Text style={styles.buttonText}>Upload Track for Results</Text>
+            )}
+          </Pressable>
         )}
       </View>
     </View>
@@ -155,6 +171,22 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     marginTop: 4,
   },
+  qrSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  qrHint: {
+    fontSize: 13,
+    color: Colors.textLight,
+    marginBottom: 10,
+  },
+  qrContainer: {
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   statusCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
@@ -175,21 +207,19 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginTop: 8,
   },
-  recordingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  successCard: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    padding: 16,
     marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  recordingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.finishRed,
-  },
-  recordingText: {
-    fontSize: 14,
-    color: Colors.textLight,
+  successText: {
+    color: Colors.success,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   errorCard: {
     backgroundColor: '#FEF2F2',
@@ -256,17 +286,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.textOnPrimary,
-  },
-  retryButton: {
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  retryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textLight,
   },
 });

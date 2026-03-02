@@ -1,10 +1,11 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '../utils/colors';
 
 export default function RootLayout() {
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -20,15 +21,19 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="director/name-race"
-          options={{ title: 'Create Race' }}
+          options={{ title: 'Create Race', headerBackVisible: false }}
         />
         <Stack.Screen
           name="director/mark-course"
           options={{ title: 'Mark Course' }}
         />
         <Stack.Screen
+          name="director/races"
+          options={{ title: 'Active Races', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
           name="racer/scan"
-          options={{ title: 'Scan QR Code' }}
+          options={{ title: 'Scan QR Code', headerBackVisible: false }}
         />
         <Stack.Screen
           name="racer/enter-name"
@@ -47,6 +52,6 @@ export default function RootLayout() {
           options={{ title: 'Leaderboard' }}
         />
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }

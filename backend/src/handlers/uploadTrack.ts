@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { docClient, TABLE_SESSIONS, TABLE_RESULTS, TRACKS_BUCKET } from '../utils/db';
 import { ok, badRequest, notFound, serverError } from '../utils/response';
@@ -34,15 +34,28 @@ export async function handler(
 
     const race = raceResult.Item;
     if (race.status === 'closed')
-      return badRequest('This race is closed');
+      return badRequest('This race has closed. Your result was not uploaded.');
+    const submissionsCloseAt = race.submissionsCloseAt ?? race.expiresAt;
+    if (
+      submissionsCloseAt &&
+      new Date() > new Date(submissionsCloseAt as string)
+    )
+      return badRequest(
+        'This race has closed. Your result was not uploaded.',
+      );
+
+    const startInput =
+      race.startLine != null
+        ? { line: race.startLine }
+        : { coords: race.startCoords };
+    const finishInput =
+      race.finishLine != null
+        ? { line: race.finishLine }
+        : { coords: race.finishCoords };
 
     let crossingResult;
     try {
-      crossingResult = detectCrossings(
-        body.points,
-        race.startCoords,
-        race.finishCoords,
-      );
+      crossingResult = detectCrossings(body.points, startInput, finishInput);
     } catch (err) {
       return badRequest(
         err instanceof Error ? err.message : 'Track processing failed',
@@ -64,10 +77,11 @@ export async function handler(
 
     const resultId = uuid();
 
+    const trackKey = `${raceId}/${resultId}.json`;
     await s3.send(
       new PutObjectCommand({
         Bucket: TRACKS_BUCKET,
-        Key: `${raceId}/${resultId}.json`,
+        Key: trackKey,
         Body: JSON.stringify(body.points),
         ContentType: 'application/json',
       }),
@@ -84,6 +98,13 @@ export async function handler(
 
     await docClient.send(
       new PutCommand({ TableName: TABLE_RESULTS, Item: resultItem }),
+    );
+
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: TRACKS_BUCKET,
+        Key: trackKey,
+      }),
     );
 
     return ok(resultItem);

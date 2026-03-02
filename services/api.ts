@@ -3,11 +3,21 @@ import Constants from 'expo-constants';
 const API_URL =
   Constants.expoConfig?.extra?.apiUrl ?? 'https://api.radtimer.com';
 
+/** Line segment for start/finish gate (two endpoints). */
+export interface LineSegment {
+  lat1: number;
+  lng1: number;
+  lat2: number;
+  lng2: number;
+}
+
 interface RaceSession {
   raceId: string;
   name: string;
   startCoords: { lat: number; lng: number };
   finishCoords: { lat: number; lng: number };
+  startLine?: LineSegment;
+  finishLine?: LineSegment;
   createdAt: string;
   expiresAt: string;
   status: 'open' | 'closed';
@@ -15,9 +25,13 @@ interface RaceSession {
 
 interface CreateRaceParams {
   name: string;
-  startCoords: { lat: number; lng: number };
-  finishCoords: { lat: number; lng: number };
-  expiryHours?: number;
+  startLine: LineSegment;
+  finishLine: LineSegment;
+  /** Midpoints; include so older API that expects startCoords/finishCoords still works */
+  startCoords?: { lat: number; lng: number };
+  finishCoords?: { lat: number; lng: number };
+  /** How long until submissions close (hours): 0.5, 1, 2, 24. Race is always deleted 24h after creation. */
+  durationHours?: number;
 }
 
 interface UploadTrackParams {
@@ -44,6 +58,10 @@ interface LeaderboardResponse {
   results: LeaderboardEntry[];
 }
 
+interface ListRacesResponse {
+  races: RaceSession[];
+}
+
 async function request<T>(
   path: string,
   options?: RequestInit,
@@ -58,7 +76,14 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(body || `Request failed: ${res.status}`);
+    let message = body || `Request failed: ${res.status}`;
+    try {
+      const parsed = JSON.parse(body) as { error?: string };
+      if (parsed.error) message = parsed.error;
+    } catch {
+      // use body as message
+    }
+    throw new Error(message);
   }
 
   return res.json();
@@ -72,8 +97,16 @@ export const api = {
     });
   },
 
+  listRaces(): Promise<ListRacesResponse> {
+    return request('/races');
+  },
+
   getRace(raceId: string): Promise<RaceSession> {
     return request(`/races/${raceId}`);
+  },
+
+  deleteRace(raceId: string): Promise<{ deleted: string }> {
+    return request(`/races/${raceId}`, { method: 'DELETE' });
   },
 
   uploadTrack(
@@ -98,4 +131,5 @@ export type {
   UploadResult,
   LeaderboardEntry,
   LeaderboardResponse,
+  ListRacesResponse,
 };

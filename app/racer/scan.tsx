@@ -32,6 +32,12 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
+        <Pressable
+          style={styles.homeButtonPermission}
+          onPress={() => router.replace('/')}
+        >
+          <Text style={styles.homeButtonText}>Back</Text>
+        </Pressable>
         <Text style={styles.permissionText}>
           Camera access is needed to scan race QR codes
         </Text>
@@ -44,6 +50,12 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.container}>
+      <Pressable
+        style={styles.homeButton}
+        onPress={() => router.replace('/')}
+      >
+        <Text style={styles.homeButtonText}>Back</Text>
+      </Pressable>
       <CameraView
         style={styles.camera}
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
@@ -94,6 +106,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 24,
     textAlign: 'center',
+  },
+  homeButton: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  homeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  homeButtonPermission: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    zIndex: 10,
+    backgroundColor: Colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
   },
   permissionContainer: {
     flex: 1,
