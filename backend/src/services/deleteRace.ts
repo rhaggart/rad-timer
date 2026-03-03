@@ -71,8 +71,10 @@ export async function deleteExpiredRaces(): Promise<void> {
   const scan = await docClient.send(
     new ScanCommand({
       TableName: TABLE_SESSIONS,
-      FilterExpression: 'expiresAt <= :now',
-      ExpressionAttributeValues: { ':now': now },
+      FilterExpression:
+        'expiresAt <= :now AND (attribute_not_exists(#plan) OR #plan <> :paid)',
+      ExpressionAttributeNames: { '#plan': 'plan' },
+      ExpressionAttributeValues: { ':now': now, ':paid': 'paid' },
       ProjectionExpression: 'raceId',
     }),
   );

@@ -25,6 +25,19 @@ interface CrossingResult {
   elapsedTime: number;
 }
 
+/** Multi-stage: each stage has its own start and finish gate. */
+export interface StageInput {
+  start: StartFinishInput;
+  finish: StartFinishInput;
+}
+
+export interface MultiStageResult {
+  startTime: number;
+  finishTime: number;
+  elapsedTime: number;
+  stageTimes: number[];
+}
+
 const CORRIDOR_METERS = 15;
 
 type LineStringFeature = ReturnType<typeof turf.lineString>;
@@ -146,5 +159,70 @@ export function detectCrossings(
     startTime: startCrossing.timestamp,
     finishTime: finishCrossing.timestamp,
     elapsedTime,
+  };
+}
+
+/**
+ * Multi-stage: each stage has its own start and finish line.
+ * For each stage in order, find first crossing of start then first crossing of finish;
+ * stage time = finish - start. Total = sum of stage times.
+ */
+export function detectMultiStageCrossings(
+  points: GPSPoint[],
+  stages: StageInput[],
+): MultiStageResult {
+  if (points.length < 2) {
+    throw new Error('Track must contain at least 2 GPS points');
+  }
+  if (stages.length === 0) {
+    throw new Error('At least one stage is required');
+  }
+
+  const stageTimes: number[] = [];
+  let currentIndex = 0;
+  let firstStartTime = 0;
+  let lastFinishTime = 0;
+
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    const startGate = toGateLine(stage.start);
+    const finishGate = toGateLine(stage.finish);
+
+    const startCrossing = findCrossingTime(points, startGate, currentIndex);
+    if (!startCrossing) {
+      throw new Error(
+        `Track did not cross stage ${i + 1} start line. Make sure you pass through the start.`,
+      );
+    }
+    if (i === 0) firstStartTime = startCrossing.timestamp;
+
+    const finishCrossing = findCrossingTime(
+      points,
+      finishGate,
+      startCrossing.index,
+    );
+    if (!finishCrossing) {
+      throw new Error(
+        `Track did not cross stage ${i + 1} finish line. Make sure you pass through the finish after the start.`,
+      );
+    }
+    lastFinishTime = finishCrossing.timestamp;
+    currentIndex = finishCrossing.index;
+
+    const elapsed = Math.round(finishCrossing.timestamp - startCrossing.timestamp);
+    if (elapsed <= 0) {
+      throw new Error(
+        `Invalid timing: stage ${i + 1} finish is not after start.`,
+      );
+    }
+    stageTimes.push(elapsed);
+  }
+
+  const elapsedTime = stageTimes.reduce((a, b) => a + b, 0);
+  return {
+    startTime: firstStartTime,
+    finishTime: lastFinishTime,
+    elapsedTime,
+    stageTimes,
   };
 }

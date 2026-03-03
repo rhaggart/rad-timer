@@ -103,6 +103,13 @@ functions:
           path: /races/{id}/leaderboard
           method: GET
 
+  getLeaderboardPdf:
+    handler: src/handlers/getLeaderboardPdf.handler
+    events:
+      - httpApi:
+          path: /races/{id}/leaderboard.pdf
+          method: GET
+
   deleteRace:
     handler: src/handlers/deleteRace.handler
     events:

@@ -12,10 +12,12 @@
     "@aws-sdk/client-s3": "^3",
     "@aws-sdk/lib-dynamodb": "^3",
     "@turf/turf": "^7",
+    "pdfkit": "^0.17.2",
     "uuid": "^11"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8",
+    "@types/pdfkit": "^0.17.5",
     "@types/uuid": "^10",
     "esbuild": "^0.27.3",
     "serverless": "^3.40.0",

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,27 @@ import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Colors } from '../../utils/colors';
 import { segmentFromCenter } from '../../utils/geo';
-import type { LineSegment } from '../../services/api';
+import type { LineSegment, StageSegment } from '../../services/api';
 import { api } from '../../services/api';
 
 const DEFAULT_ANGLE = 90;
+type Coord = { lat: number; lng: number };
+interface StageState {
+  startCenter: Coord | null;
+  startAngle: number;
+  startLengthMeters: number;
+  finishCenter: Coord | null;
+  finishAngle: number;
+  finishLengthMeters: number;
+}
+const emptyStage = (): StageState => ({
+  startCenter: null,
+  startAngle: DEFAULT_ANGLE,
+  startLengthMeters: DEFAULT_LENGTH_METERS,
+  finishCenter: null,
+  finishAngle: DEFAULT_ANGLE,
+  finishLengthMeters: DEFAULT_LENGTH_METERS,
+});
 const DEFAULT_LENGTH_METERS = 15;
 const MIN_LENGTH = 5;
 const MAX_LENGTH = 50;
@@ -32,30 +49,26 @@ function formatCoord(value: number, type: 'lat' | 'lng'): string {
 
 export default function MarkCourseScreen() {
   const router = useRouter();
-  const { raceName, durationHours } = useLocalSearchParams<{
+  const { raceName, durationHours, plan: planParam } = useLocalSearchParams<{
     raceName: string;
     durationHours: string;
+    plan?: string;
   }>();
+  const isPaid = planParam === 'paid';
 
   const mapRef = useRef<MapView>(null);
   const [region, setRegion] = useState<Region | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
-  const [startCenter, setStartCenter] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
-  const [finishCenter, setFinishCenter] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<Coord | null>(null);
+  const [startCenter, setStartCenter] = useState<Coord | null>(null);
+  const [finishCenter, setFinishCenter] = useState<Coord | null>(null);
   const [startAngle, setStartAngle] = useState(DEFAULT_ANGLE);
   const [startLengthMeters, setStartLengthMeters] = useState(DEFAULT_LENGTH_METERS);
   const [finishAngle, setFinishAngle] = useState(DEFAULT_ANGLE);
   const [finishLengthMeters, setFinishLengthMeters] = useState(DEFAULT_LENGTH_METERS);
   const [creating, setCreating] = useState(false);
+  const [stages, setStages] = useState<StageState[]>(() =>
+    isPaid ? [emptyStage()] : [],
+  );
 
   const startLine: LineSegment | null =
     startCenter
@@ -65,6 +78,21 @@ export default function MarkCourseScreen() {
     finishCenter
       ? segmentFromCenter(finishCenter, finishAngle, finishLengthMeters)
       : null;
+
+  const stageSegments: (StageSegment | null)[] = stages.map((s) => {
+    if (!s.startCenter || !s.finishCenter) return null;
+    return {
+      startLine: segmentFromCenter(s.startCenter, s.startAngle, s.startLengthMeters),
+      finishLine: segmentFromCenter(s.finishCenter, s.finishAngle, s.finishLengthMeters),
+    };
+  });
+  const allStagesComplete =
+    isPaid &&
+    stages.length > 0 &&
+    stageSegments.every((s) => s != null);
+  const canCreateMultiStage = allStagesComplete;
+  const canCreateSingle = !isPaid && startLine && finishLine && startCenter && finishCenter;
+  const canCreate = isPaid ? canCreateMultiStage : canCreateSingle;
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
@@ -122,24 +150,96 @@ export default function MarkCourseScreen() {
     }
   };
 
-  const canCreate = startLine && finishLine;
+  const captureStageStart = (idx: number) => {
+    if (currentLocation) {
+      setStages((prev) => {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          startCenter: { ...currentLocation },
+          startAngle: DEFAULT_ANGLE,
+          startLengthMeters: DEFAULT_LENGTH_METERS,
+        };
+        return next;
+      });
+    }
+  };
+  const captureStageFinish = (idx: number) => {
+    if (currentLocation) {
+      setStages((prev) => {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          finishCenter: { ...currentLocation },
+          finishAngle: DEFAULT_ANGLE,
+          finishLengthMeters: DEFAULT_LENGTH_METERS,
+        };
+        return next;
+      });
+    }
+  };
+  const addStage = () => {
+    setStages((prev) => [...prev, emptyStage()]);
+  };
+  const updateStageStartAngle = (idx: number, delta: number) => {
+    setStages((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], startAngle: Math.max(0, Math.min(360, next[idx].startAngle + delta)) };
+      return next;
+    });
+  };
+  const updateStageStartLength = (idx: number, delta: number) => {
+    setStages((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], startLengthMeters: Math.max(MIN_LENGTH, Math.min(MAX_LENGTH, next[idx].startLengthMeters + delta)) };
+      return next;
+    });
+  };
+  const updateStageFinishAngle = (idx: number, delta: number) => {
+    setStages((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], finishAngle: Math.max(0, Math.min(360, next[idx].finishAngle + delta)) };
+      return next;
+    });
+  };
+  const updateStageFinishLength = (idx: number, delta: number) => {
+    setStages((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], finishLengthMeters: Math.max(MIN_LENGTH, Math.min(MAX_LENGTH, next[idx].finishLengthMeters + delta)) };
+      return next;
+    });
+  };
 
   const handleCreate = async () => {
-    if (!startLine || !finishLine || !startCenter || !finishCenter) return;
     setCreating(true);
     try {
-      const race = await api.createRace({
-        name: raceName ?? 'Unnamed Race',
-        startLine,
-        finishLine,
-        startCoords: startCenter,
-        finishCoords: finishCenter,
-        durationHours: Number(durationHours) || 24,
-      });
-      router.replace({
-        pathname: '/race/[id]/invite',
-        params: { id: race.raceId, raceName: race.name },
-      });
+      if (isPaid && allStagesComplete && stageSegments.every(Boolean)) {
+        const segs = stageSegments as StageSegment[];
+        const race = await api.createRace({
+          name: raceName ?? 'Unnamed Race',
+          plan: 'paid',
+          durationHours: Number(durationHours) || 24,
+          stages: segs,
+        });
+        router.replace({
+          pathname: '/race/[id]/invite',
+          params: { id: race.raceId, raceName: race.name },
+        });
+      } else if (!isPaid && startLine && finishLine && startCenter && finishCenter) {
+        const race = await api.createRace({
+          name: raceName ?? 'Unnamed Race',
+          startLine,
+          finishLine,
+          startCoords: startCenter,
+          finishCoords: finishCenter,
+          durationHours: Number(durationHours) || 24,
+          plan: 'free',
+        });
+        router.replace({
+          pathname: '/race/[id]/invite',
+          params: { id: race.raceId, raceName: race.name },
+        });
+      }
     } catch (err) {
       Alert.alert(
         'Error',
@@ -165,7 +265,9 @@ export default function MarkCourseScreen() {
     <View style={styles.container}>
       <View style={styles.instructions}>
         <Text style={styles.instructionText}>
-          Move to each spot, tap Create Start and Create Finish, then adjust angle and length
+          {isPaid
+            ? 'Add stages: for each stage tap Create Stage N Start and Create Stage N Finish, then adjust. Use "Create another stage" for more.'
+            : 'Move to each spot, tap Create Start and Create Finish, then adjust angle and length'}
         </Text>
       </View>
 
@@ -179,27 +281,70 @@ export default function MarkCourseScreen() {
           mapType={mapType}
           followsUserLocation
         >
-          {startCenter && (
+          {!isPaid && startCenter && (
             <Marker
-              coordinate={{
-                latitude: startCenter.lat,
-                longitude: startCenter.lng,
-              }}
+              coordinate={{ latitude: startCenter.lat, longitude: startCenter.lng }}
               pinColor={Colors.startGreen}
               title="Start"
             />
           )}
-          {finishCenter && (
+          {!isPaid && finishCenter && (
             <Marker
-              coordinate={{
-                latitude: finishCenter.lat,
-                longitude: finishCenter.lng,
-              }}
+              coordinate={{ latitude: finishCenter.lat, longitude: finishCenter.lng }}
               pinColor={Colors.finishRed}
               title="Finish"
             />
           )}
-          {startLine && (
+          {isPaid &&
+            stages.map((s, i) => (
+              <React.Fragment key={i}>
+                {s.startCenter && (
+                  <Marker
+                    coordinate={{ latitude: s.startCenter.lat, longitude: s.startCenter.lng }}
+                    pinColor={Colors.startGreen}
+                    title={`Stage ${i + 1} Start`}
+                  />
+                )}
+                {s.finishCenter && (
+                  <Marker
+                    coordinate={{ latitude: s.finishCenter.lat, longitude: s.finishCenter.lng }}
+                    pinColor={Colors.finishRed}
+                    title={`Stage ${i + 1} Finish`}
+                  />
+                )}
+                {s.startCenter &&
+                  (() => {
+                    const line = segmentFromCenter(s.startCenter, s.startAngle, s.startLengthMeters);
+                    return (
+                      <Polyline
+                        key={`s${i}`}
+                        coordinates={[
+                          { latitude: line.lat1, longitude: line.lng1 },
+                          { latitude: line.lat2, longitude: line.lng2 },
+                        ]}
+                        strokeColor={Colors.startGreen}
+                        strokeWidth={4}
+                      />
+                    );
+                  })()}
+                {s.finishCenter &&
+                  (() => {
+                    const line = segmentFromCenter(s.finishCenter, s.finishAngle, s.finishLengthMeters);
+                    return (
+                      <Polyline
+                        key={`f${i}`}
+                        coordinates={[
+                          { latitude: line.lat1, longitude: line.lng1 },
+                          { latitude: line.lat2, longitude: line.lng2 },
+                        ]}
+                        strokeColor={Colors.finishRed}
+                        strokeWidth={4}
+                      />
+                    );
+                  })()}
+              </React.Fragment>
+            ))}
+          {!isPaid && startLine && (
             <Polyline
               coordinates={[
                 { latitude: startLine.lat1, longitude: startLine.lng1 },
@@ -209,7 +354,7 @@ export default function MarkCourseScreen() {
               strokeWidth={4}
             />
           )}
-          {finishLine && (
+          {!isPaid && finishLine && (
             <Polyline
               coordinates={[
                 { latitude: finishLine.lat1, longitude: finishLine.lng1 },
@@ -232,7 +377,7 @@ export default function MarkCourseScreen() {
           )}
         </View>
 
-        {(startCenter || finishCenter) && (
+        {(!isPaid && (startCenter || finishCenter)) && (
           <View style={styles.capturedOverlay}>
             {startCenter && (
               <View style={styles.capturedRow}>
@@ -261,114 +406,173 @@ export default function MarkCourseScreen() {
         contentContainerStyle={styles.adjustPanelContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.lineControls}>
-          <Pressable
-            style={[styles.captureButton, styles.startButton, styles.captureButtonInPanel]}
-            onPress={captureStart}
-            disabled={!currentLocation}
-          >
-            <Text style={styles.captureButtonText}>Create Start</Text>
-          </Pressable>
-          {startCenter && (
-            <>
-              <Text style={styles.lineControlsTitle}>Start line</Text>
-              <View style={styles.stepperRow}>
-                <Text style={styles.stepperLabel}>Angle:</Text>
-                <View style={styles.stepper}>
+        {isPaid ? (
+          <>
+            {stages.map((stage, idx) => (
+              <View key={idx} style={styles.stageBlock}>
+                <Text style={styles.stageBlockTitle}>Stage {idx + 1}</Text>
+                <View style={styles.lineControls}>
                   <Pressable
-                    style={styles.stepperButton}
-                    onPress={() => setStartAngle((a) => Math.max(0, a - ANGLE_STEP))}
+                    style={[styles.captureButton, styles.startButton, styles.captureButtonInPanel]}
+                    onPress={() => captureStageStart(idx)}
+                    disabled={!currentLocation}
                   >
-                    <Text style={styles.stepperButtonText}>−</Text>
+                    <Text style={styles.captureButtonText}>Create Stage {idx + 1} Start</Text>
                   </Pressable>
-                  <Text style={styles.stepperValue}>{startAngle}°</Text>
+                  {stage.startCenter && (
+                    <>
+                      <Text style={styles.lineControlsTitle}>Start line</Text>
+                      <View style={styles.stepperRow}>
+                        <Text style={styles.stepperLabel}>Angle:</Text>
+                        <View style={styles.stepper}>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageStartAngle(idx, -ANGLE_STEP)}>
+                            <Text style={styles.stepperButtonText}>−</Text>
+                          </Pressable>
+                          <Text style={styles.stepperValue}>{stage.startAngle}°</Text>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageStartAngle(idx, ANGLE_STEP)}>
+                            <Text style={styles.stepperButtonText}>+</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      <View style={styles.stepperRow}>
+                        <Text style={styles.stepperLabel}>Length:</Text>
+                        <View style={styles.stepper}>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageStartLength(idx, -LENGTH_STEP)}>
+                            <Text style={styles.stepperButtonText}>−</Text>
+                          </Pressable>
+                          <Text style={styles.stepperValue}>{stage.startLengthMeters} m</Text>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageStartLength(idx, LENGTH_STEP)}>
+                            <Text style={styles.stepperButtonText}>+</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </View>
+                <View style={styles.lineControls}>
                   <Pressable
-                    style={styles.stepperButton}
-                    onPress={() => setStartAngle((a) => Math.min(360, a + ANGLE_STEP))}
+                    style={[styles.captureButton, styles.finishButton, styles.captureButtonInPanel]}
+                    onPress={() => captureStageFinish(idx)}
+                    disabled={!currentLocation}
                   >
-                    <Text style={styles.stepperButtonText}>+</Text>
+                    <Text style={styles.captureButtonText}>Create Stage {idx + 1} Finish</Text>
                   </Pressable>
+                  {stage.finishCenter && (
+                    <>
+                      <Text style={styles.lineControlsTitle}>Finish line</Text>
+                      <View style={styles.stepperRow}>
+                        <Text style={styles.stepperLabel}>Angle:</Text>
+                        <View style={styles.stepper}>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageFinishAngle(idx, -ANGLE_STEP)}>
+                            <Text style={styles.stepperButtonText}>−</Text>
+                          </Pressable>
+                          <Text style={styles.stepperValue}>{stage.finishAngle}°</Text>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageFinishAngle(idx, ANGLE_STEP)}>
+                            <Text style={styles.stepperButtonText}>+</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      <View style={styles.stepperRow}>
+                        <Text style={styles.stepperLabel}>Length:</Text>
+                        <View style={styles.stepper}>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageFinishLength(idx, -LENGTH_STEP)}>
+                            <Text style={styles.stepperButtonText}>−</Text>
+                          </Pressable>
+                          <Text style={styles.stepperValue}>{stage.finishLengthMeters} m</Text>
+                          <Pressable style={styles.stepperButton} onPress={() => updateStageFinishLength(idx, LENGTH_STEP)}>
+                            <Text style={styles.stepperButtonText}>+</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    </>
+                  )}
                 </View>
               </View>
-              <View style={styles.stepperRow}>
-                <Text style={styles.stepperLabel}>Length:</Text>
-                <View style={styles.stepper}>
-                  <Pressable
-                    style={styles.stepperButton}
-                    onPress={() =>
-                      setStartLengthMeters((l) => Math.max(MIN_LENGTH, l - LENGTH_STEP))
-                    }
-                  >
-                    <Text style={styles.stepperButtonText}>−</Text>
-                  </Pressable>
-                  <Text style={styles.stepperValue}>{startLengthMeters} m</Text>
-                  <Pressable
-                    style={styles.stepperButton}
-                    onPress={() =>
-                      setStartLengthMeters((l) => Math.min(MAX_LENGTH, l + LENGTH_STEP))
-                    }
-                  >
-                    <Text style={styles.stepperButtonText}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
-        <View style={styles.lineControls}>
-          <Pressable
-            style={[styles.captureButton, styles.finishButton, styles.captureButtonInPanel]}
-            onPress={captureFinish}
-            disabled={!currentLocation}
-          >
-            <Text style={styles.captureButtonText}>Create Finish</Text>
-          </Pressable>
-          {finishCenter && (
-            <>
-              <Text style={styles.lineControlsTitle}>Finish line</Text>
-              <View style={styles.stepperRow}>
-                <Text style={styles.stepperLabel}>Angle:</Text>
-                <View style={styles.stepper}>
-                  <Pressable
-                    style={styles.stepperButton}
-                    onPress={() => setFinishAngle((a) => Math.max(0, a - ANGLE_STEP))}
-                  >
-                    <Text style={styles.stepperButtonText}>−</Text>
-                  </Pressable>
-                  <Text style={styles.stepperValue}>{finishAngle}°</Text>
-                  <Pressable
-                    style={styles.stepperButton}
-                    onPress={() => setFinishAngle((a) => Math.min(360, a + ANGLE_STEP))}
-                  >
-                    <Text style={styles.stepperButtonText}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
-              <View style={styles.stepperRow}>
-                <Text style={styles.stepperLabel}>Length:</Text>
-                <View style={styles.stepper}>
-                  <Pressable
-                    style={styles.stepperButton}
-                    onPress={() =>
-                      setFinishLengthMeters((l) => Math.max(MIN_LENGTH, l - LENGTH_STEP))
-                    }
-                  >
-                    <Text style={styles.stepperButtonText}>−</Text>
-                  </Pressable>
-                  <Text style={styles.stepperValue}>{finishLengthMeters} m</Text>
-                  <Pressable
-                    style={styles.stepperButton}
-                    onPress={() =>
-                      setFinishLengthMeters((l) => Math.min(MAX_LENGTH, l + LENGTH_STEP))
-                    }
-                  >
-                    <Text style={styles.stepperButtonText}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
+            ))}
+            <Pressable style={styles.addStageButton} onPress={addStage}>
+              <Text style={styles.addStageButtonText}>Create another stage</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <View style={styles.lineControls}>
+              <Pressable
+                style={[styles.captureButton, styles.startButton, styles.captureButtonInPanel]}
+                onPress={captureStart}
+                disabled={!currentLocation}
+              >
+                <Text style={styles.captureButtonText}>Create Start</Text>
+              </Pressable>
+              {startCenter && (
+                <>
+                  <Text style={styles.lineControlsTitle}>Start line</Text>
+                  <View style={styles.stepperRow}>
+                    <Text style={styles.stepperLabel}>Angle:</Text>
+                    <View style={styles.stepper}>
+                      <Pressable style={styles.stepperButton} onPress={() => setStartAngle((a) => Math.max(0, a - ANGLE_STEP))}>
+                        <Text style={styles.stepperButtonText}>−</Text>
+                      </Pressable>
+                      <Text style={styles.stepperValue}>{startAngle}°</Text>
+                      <Pressable style={styles.stepperButton} onPress={() => setStartAngle((a) => Math.min(360, a + ANGLE_STEP))}>
+                        <Text style={styles.stepperButtonText}>+</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                  <View style={styles.stepperRow}>
+                    <Text style={styles.stepperLabel}>Length:</Text>
+                    <View style={styles.stepper}>
+                      <Pressable style={styles.stepperButton} onPress={() => setStartLengthMeters((l) => Math.max(MIN_LENGTH, l - LENGTH_STEP))}>
+                        <Text style={styles.stepperButtonText}>−</Text>
+                      </Pressable>
+                      <Text style={styles.stepperValue}>{startLengthMeters} m</Text>
+                      <Pressable style={styles.stepperButton} onPress={() => setStartLengthMeters((l) => Math.min(MAX_LENGTH, l + LENGTH_STEP))}>
+                        <Text style={styles.stepperButtonText}>+</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+            <View style={styles.lineControls}>
+              <Pressable
+                style={[styles.captureButton, styles.finishButton, styles.captureButtonInPanel]}
+                onPress={captureFinish}
+                disabled={!currentLocation}
+              >
+                <Text style={styles.captureButtonText}>Create Finish</Text>
+              </Pressable>
+              {finishCenter && (
+                <>
+                  <Text style={styles.lineControlsTitle}>Finish line</Text>
+                  <View style={styles.stepperRow}>
+                    <Text style={styles.stepperLabel}>Angle:</Text>
+                    <View style={styles.stepper}>
+                      <Pressable style={styles.stepperButton} onPress={() => setFinishAngle((a) => Math.max(0, a - ANGLE_STEP))}>
+                        <Text style={styles.stepperButtonText}>−</Text>
+                      </Pressable>
+                      <Text style={styles.stepperValue}>{finishAngle}°</Text>
+                      <Pressable style={styles.stepperButton} onPress={() => setFinishAngle((a) => Math.min(360, a + ANGLE_STEP))}>
+                        <Text style={styles.stepperButtonText}>+</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                  <View style={styles.stepperRow}>
+                    <Text style={styles.stepperLabel}>Length:</Text>
+                    <View style={styles.stepper}>
+                      <Pressable style={styles.stepperButton} onPress={() => setFinishLengthMeters((l) => Math.max(MIN_LENGTH, l - LENGTH_STEP))}>
+                        <Text style={styles.stepperButtonText}>−</Text>
+                      </Pressable>
+                      <Text style={styles.stepperValue}>{finishLengthMeters} m</Text>
+                      <Pressable style={styles.stepperButton} onPress={() => setFinishLengthMeters((l) => Math.min(MAX_LENGTH, l + LENGTH_STEP))}>
+                        <Text style={styles.stepperButtonText}>+</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -483,6 +687,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     gap: 6,
+  },
+  stageBlock: {
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  stageBlockTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  addStageButton: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  addStageButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   lineControls: {
     backgroundColor: '#f5f5f5',

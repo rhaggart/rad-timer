@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import QRCode from 'react-native-qrcode-svg';
 import { Colors } from '../../../utils/colors';
 import { useGPSRecording } from '../../../hooks/useGPSRecording';
 import { api } from '../../../services/api';
+import type { RaceSession } from '../../../services/api';
+import { TrackPreview } from '../../../components/TrackPreview';
 
 export default function RecordScreen() {
   const router = useRouter();
@@ -26,6 +28,15 @@ export default function RecordScreen() {
     useGPSRecording();
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [race, setRace] = useState<RaceSession | null>(null);
+
+  useEffect(() => {
+    if (id && state === 'stopped' && points.length >= 2) {
+      api.getRace(id).then(setRace).catch(() => {});
+    } else if (state !== 'stopped') {
+      setRace(null);
+    }
+  }, [id, state, points.length]);
 
   const handleUpload = async () => {
     if (points.length < 2) {
@@ -88,10 +99,17 @@ export default function RecordScreen() {
           {state === 'recording' && 'TRACKING'}
           {state === 'stopped' && 'TRACK RECORDED'}
         </Text>
-        {state === 'stopped' && (
-          <Text style={styles.pointCount}>
-            {pointCount} GPS point{pointCount !== 1 ? 's' : ''}
-          </Text>
+        {state === 'stopped' && points.length >= 2 && (
+          <>
+            <TrackPreview
+              points={points}
+              startLine={race?.startLine ?? null}
+              finishLine={race?.finishLine ?? null}
+            />
+            <Text style={styles.trackHint}>
+              Your path — green = start line, red = finish line
+            </Text>
+          </>
         )}
       </View>
 
@@ -206,6 +224,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.text,
     marginTop: 8,
+  },
+  trackHint: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 10,
+    textAlign: 'center',
   },
   successCard: {
     backgroundColor: '#ECFDF5',

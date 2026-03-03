@@ -62,6 +62,18 @@ export default function InviteScreen() {
         >
           <Text style={styles.racingButtonText}>I'm Racing Too</Text>
         </Pressable>
+
+        <Pressable
+          style={styles.mapLinkButton}
+          onPress={() =>
+            router.push({
+              pathname: '/race/[id]/map',
+              params: { id, raceName },
+            })
+          }
+        >
+          <Text style={styles.mapLinkButtonText}>Show race on map</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -143,5 +155,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.textOnPrimary,
+  },
+  mapLinkButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  mapLinkButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.primary,
+    textDecorationLine: 'underline',
   },
 });

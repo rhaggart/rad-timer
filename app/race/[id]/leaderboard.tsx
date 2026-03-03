@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
+  Linking,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../../utils/colors';
 import { api, LeaderboardEntry, RaceSession } from '../../../services/api';
@@ -94,7 +96,9 @@ export default function LeaderboardScreen() {
         </View>
       </View>
       <Text style={styles.resultsKeptNote}>
-        Results are kept for 24 hours.
+        {race?.plan === 'paid'
+          ? 'Results are kept indefinitely.'
+          : 'Results are kept for 24 hours.'}
       </Text>
 
       <FlatList
@@ -137,6 +141,15 @@ export default function LeaderboardScreen() {
                   </View>
                 )}
               </View>
+              {race?.stages?.length && item.stageTimes && item.stageTimes.length > 0 && (
+                <View style={styles.stageTimesRow}>
+                  {item.stageTimes.map((t, i) => (
+                    <Text key={i} style={styles.stageTimeChip}>
+                      S{i + 1}: {formatElapsedTime(t)}
+                    </Text>
+                  ))}
+                </View>
+              )}
             </View>
             <Text style={styles.time}>
               {formatElapsedTime(item.elapsedTime)}
@@ -146,6 +159,17 @@ export default function LeaderboardScreen() {
       />
 
       <View style={styles.footer}>
+        {race?.plan === 'paid' && (
+          <Pressable
+            style={styles.pdfButton}
+            onPress={() => {
+              const apiUrl = Constants.expoConfig?.extra?.apiUrl ?? 'https://api.radtimer.com';
+              Linking.openURL(`${apiUrl}/races/${id}/leaderboard.pdf`);
+            }}
+          >
+            <Text style={styles.pdfButtonText}>Download PDF</Text>
+          </Pressable>
+        )}
         <Pressable style={styles.shareButton} onPress={handleShare}>
           <Text style={styles.shareButtonText}>Share Race</Text>
         </Pressable>
@@ -290,14 +314,39 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  stageTimesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  stageTimeChip: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontVariant: ['tabular-nums'],
+  },
   footer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     padding: 16,
     paddingBottom: 32,
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+  },
+  pdfButton: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  pdfButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   shareButton: {
     flex: 1,

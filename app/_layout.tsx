@@ -1,3 +1,4 @@
+import '../tasks/backgroundLocation'; // Register background location task at app load
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -50,6 +51,10 @@ export default function RootLayout() {
         <Stack.Screen
           name="race/[id]/leaderboard"
           options={{ title: 'Leaderboard' }}
+        />
+        <Stack.Screen
+          name="race/[id]/map"
+          options={{ title: 'Race on map', headerBackVisible: false }}
         />
       </Stack>
     </GestureHandlerRootView>

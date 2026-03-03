@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.radtimer.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "associatedDomains": [
         "applinks:radtimer.com"
       ],
@@ -31,6 +31,7 @@
     },
     "android": {
       "package": "com.radtimer.app",
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#1a1a2e",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -73,7 +74,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "RAD Timer needs background location to record your race track."
+          "locationAlwaysAndWhenInUsePermission": "RAD Timer needs background location to record your race track.",
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [

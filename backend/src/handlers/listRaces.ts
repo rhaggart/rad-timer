@@ -10,14 +10,17 @@ export async function handler(
   try {
     await deleteExpiredRaces();
 
+    const now = new Date().toISOString();
     const result = await docClient.send(
       new ScanCommand({
         TableName: TABLE_SESSIONS,
-        FilterExpression: '#status = :open AND expiresAt > :now',
-        ExpressionAttributeNames: { '#status': 'status' },
+        FilterExpression:
+          '#status = :open AND (expiresAt > :now OR #plan = :paid)',
+        ExpressionAttributeNames: { '#status': 'status', '#plan': 'plan' },
         ExpressionAttributeValues: {
           ':open': 'open',
-          ':now': new Date().toISOString(),
+          ':now': now,
+          ':paid': 'paid',
         },
       }),
     );

@@ -17,6 +17,7 @@ export default function NameRaceScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [durationHours, setDurationHours] = useState('1');
+  const [plan, setPlan] = useState<'free' | 'paid'>('free');
 
   const canProceed = name.trim().length > 0;
 
@@ -51,6 +52,37 @@ export default function NameRaceScreen() {
           autoFocus
           maxLength={50}
         />
+
+        <Text style={[styles.label, { marginTop: 24 }]}>Plan</Text>
+        <View style={styles.expiryRow}>
+          {[
+            { value: 'free' as const, label: 'Free' },
+            { value: 'paid' as const, label: 'Paid ($2/mo)' },
+          ].map(({ value, label }) => (
+            <Pressable
+              key={value}
+              style={[
+                styles.expiryChip,
+                plan === value && styles.expiryChipActive,
+              ]}
+              onPress={() => setPlan(value)}
+            >
+              <Text
+                style={[
+                  styles.expiryChipText,
+                  plan === value && styles.expiryChipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {plan === 'paid' && (
+          <Text style={styles.planHint}>
+            Paid: results kept indefinitely, PDF export, multi-stage races.
+          </Text>
+        )}
 
         <Text style={[styles.label, { marginTop: 24 }]}>
           Submissions close after
@@ -88,7 +120,11 @@ export default function NameRaceScreen() {
             canProceed &&
             router.push({
               pathname: '/director/mark-course',
-              params: { raceName: name.trim(), durationHours },
+              params: {
+                raceName: name.trim(),
+                durationHours,
+                plan: plan === 'paid' ? 'paid' : 'free',
+              },
             })
           }
           disabled={!canProceed}
@@ -196,5 +232,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.textOnPrimary,
+  },
+  planHint: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 8,
   },
 });

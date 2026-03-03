@@ -11,6 +11,12 @@ export interface LineSegment {
   lng2: number;
 }
 
+/** One stage in a multi-stage race: own start and finish line. */
+export interface StageSegment {
+  startLine: LineSegment;
+  finishLine: LineSegment;
+}
+
 interface RaceSession {
   raceId: string;
   name: string;
@@ -21,17 +27,20 @@ interface RaceSession {
   createdAt: string;
   expiresAt: string;
   status: 'open' | 'closed';
+  plan?: 'free' | 'paid';
+  stages?: StageSegment[];
 }
 
 interface CreateRaceParams {
   name: string;
-  startLine: LineSegment;
-  finishLine: LineSegment;
-  /** Midpoints; include so older API that expects startCoords/finishCoords still works */
+  /** Single-stage: provide startLine + finishLine. Multi-stage: provide stages (requires plan: 'paid'). */
+  startLine?: LineSegment;
+  finishLine?: LineSegment;
   startCoords?: { lat: number; lng: number };
   finishCoords?: { lat: number; lng: number };
-  /** How long until submissions close (hours): 0.5, 1, 2, 24. Race is always deleted 24h after creation. */
   durationHours?: number;
+  plan?: 'free' | 'paid';
+  stages?: StageSegment[];
 }
 
 interface UploadTrackParams {
@@ -51,6 +60,7 @@ interface LeaderboardEntry {
   elapsedTime: number;
   uploadedAt: string;
   attemptNumber: number;
+  stageTimes?: number[];
 }
 
 interface LeaderboardResponse {
@@ -126,6 +136,7 @@ export const api = {
 
 export type {
   RaceSession,
+  StageSegment,
   CreateRaceParams,
   UploadTrackParams,
   UploadResult,

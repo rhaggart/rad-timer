@@ -11,6 +11,11 @@ interface LineSegmentBody {
   lng2: number;
 }
 
+interface StageBody {
+  startLine: LineSegmentBody;
+  finishLine: LineSegmentBody;
+}
+
 interface CreateRaceBody {
   name: string;
   startCoords?: { lat: number; lng: number };
@@ -20,6 +25,10 @@ interface CreateRaceBody {
   /** How long until submissions close (hours). Race is always deleted 24h after creation. */
   durationHours?: number;
   expiryHours?: number;
+  /** 'paid' = results kept indefinitely, allows multi-stage. */
+  plan?: 'free' | 'paid';
+  /** Multi-stage: each stage has its own start and finish. Requires plan === 'paid'. */
+  stages?: StageBody[];
 }
 
 function isLineSegment(x: unknown): x is LineSegmentBody {
@@ -40,6 +49,12 @@ function lineMidpoint(line: LineSegmentBody): { lat: number; lng: number } {
   };
 }
 
+function isStageBody(x: unknown): x is StageBody {
+  if (!x || typeof x !== 'object') return false;
+  const o = x as Record<string, unknown>;
+  return isLineSegment(o.startLine) && isLineSegment(o.finishLine);
+}
+
 export async function handler(
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
@@ -48,12 +63,26 @@ export async function handler(
 
     if (!body.name?.trim()) return badRequest('Race name is required');
 
+    const plan = body.plan === 'paid' ? 'paid' : 'free';
+    const stages = Array.isArray(body.stages)
+      ? body.stages.filter(isStageBody)
+      : undefined;
+
+    if (stages != null && stages.length > 0 && plan !== 'paid') {
+      return badRequest('Multi-stage races require a paid plan.');
+    }
+
     let startCoords: { lat: number; lng: number };
     let finishCoords: { lat: number; lng: number };
     let startLine: LineSegmentBody | undefined;
     let finishLine: LineSegmentBody | undefined;
 
-    if (isLineSegment(body.startLine) && isLineSegment(body.finishLine)) {
+    if (stages != null && stages.length > 0) {
+      startLine = stages[0].startLine;
+      finishLine = stages[stages.length - 1].finishLine;
+      startCoords = lineMidpoint(startLine);
+      finishCoords = lineMidpoint(finishLine);
+    } else if (isLineSegment(body.startLine) && isLineSegment(body.finishLine)) {
       startLine = body.startLine;
       finishLine = body.finishLine;
       startCoords = lineMidpoint(startLine);
@@ -68,7 +97,7 @@ export async function handler(
       finishCoords = body.finishCoords;
     } else {
       return badRequest(
-        'Either startLine and finishLine (each with lat1, lng1, lat2, lng2) or startCoords and finishCoords are required',
+        'Either startLine and finishLine (each with lat1, lng1, lat2, lng2), startCoords and finishCoords, or stages (paid) are required',
       );
     }
 
@@ -78,7 +107,10 @@ export async function handler(
     const submissionsCloseAt = new Date(
       now.getTime() + durationHours * 60 * 60 * 1000,
     );
-    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const expiresAt =
+      plan === 'paid'
+        ? new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000)
+        : new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const item: Record<string, unknown> = {
       raceId,
@@ -89,9 +121,11 @@ export async function handler(
       expiresAt: expiresAt.toISOString(),
       submissionsCloseAt: submissionsCloseAt.toISOString(),
       status: 'open' as const,
+      plan,
     };
     if (startLine) item.startLine = startLine;
     if (finishLine) item.finishLine = finishLine;
+    if (stages != null && stages.length > 0) item.stages = stages;
 
     await docClient.send(
       new PutCommand({ TableName: TABLE_SESSIONS, Item: item }),
