@@ -14,17 +14,28 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../utils/colors';
 import { api, RaceSession } from '../../services/api';
+import { addJoinedRaceId } from '../../utils/myRacesStore';
 
 export default function EnterNameScreen() {
   const router = useRouter();
-  const { raceId, raceName: passedName } = useLocalSearchParams<{
+  const { raceId, raceName: passedName, participantName: savedName, isDirector } = useLocalSearchParams<{
     raceId: string;
     raceName?: string;
+    participantName?: string;
+    isDirector?: string;
   }>();
 
-  const [name, setName] = useState('');
+  const [name, setName] = useState(savedName ?? '');
   const [race, setRace] = useState<RaceSession | null>(null);
   const [loading, setLoading] = useState(!passedName);
+
+  useEffect(() => {
+    if (savedName) setName(savedName);
+  }, [savedName]);
+
+  useEffect(() => {
+    if (raceId) addJoinedRaceId(raceId).catch(() => {});
+  }, [raceId]);
 
   useEffect(() => {
     if (passedName) {
@@ -83,6 +94,7 @@ export default function EnterNameScreen() {
                 id: raceId,
                 participantName: name.trim(),
                 raceName: race?.name,
+                isDirector: isDirector ?? '',
               },
             })
           }

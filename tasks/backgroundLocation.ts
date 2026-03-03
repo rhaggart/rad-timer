@@ -11,6 +11,8 @@ export interface StoredGPSPoint {
   lat: number;
   lng: number;
   timestamp: number;
+  /** True when timestamp came from Date.now() fallback instead of GPS. */
+  timestampFallback?: boolean;
 }
 
 const points: StoredGPSPoint[] = [];
@@ -40,10 +42,12 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, ({
   }
   if (data?.locations?.length) {
     for (const loc of data.locations) {
+      const usedFallback = loc.timestamp == null;
       points.push({
         lat: loc.coords.latitude,
         lng: loc.coords.longitude,
         timestamp: loc.timestamp ?? Date.now(),
+        ...(usedFallback && { timestampFallback: true }),
       });
     }
   }

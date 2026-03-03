@@ -15,6 +15,8 @@ const s3 = new S3Client({});
 interface UploadBody {
   participantName: string;
   points: Array<{ lat: number; lng: number; timestamp: number }>;
+  /** True if any point used device time fallback instead of GPS. */
+  timestampFallback?: boolean;
 }
 
 export async function handler(
@@ -62,6 +64,8 @@ export async function handler(
 
     let elapsedTime: number;
     let stageTimes: number[] | undefined;
+    let startTime: number;
+    let finishTime: number;
 
     if (useMultiStage && raceStages) {
       const stageInputs: StageInput[] = raceStages.map((s) => ({
@@ -72,6 +76,8 @@ export async function handler(
         const multi = detectMultiStageCrossings(body.points, stageInputs);
         elapsedTime = multi.elapsedTime;
         stageTimes = multi.stageTimes;
+        startTime = multi.startTime;
+        finishTime = multi.finishTime;
       } catch (err) {
         return badRequest(
           err instanceof Error ? err.message : 'Track processing failed',
@@ -93,6 +99,8 @@ export async function handler(
           finishInput,
         );
         elapsedTime = crossingResult.elapsedTime;
+        startTime = crossingResult.startTime;
+        finishTime = crossingResult.finishTime;
       } catch (err) {
         return badRequest(
           err instanceof Error ? err.message : 'Track processing failed',
@@ -132,6 +140,10 @@ export async function handler(
       elapsedTime,
       uploadedAt: new Date().toISOString(),
       attemptNumber,
+      startTime,
+      finishTime,
+      timestampFallback: body.timestampFallback === true,
+      gpsSampling: race.gpsSampling === 'high' ? 'high' : 'standard',
     };
     if (stageTimes != null) resultItem.stageTimes = stageTimes;
 

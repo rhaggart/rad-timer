@@ -33,16 +33,23 @@ function project(
     all.push(a, b);
   });
   if (all.length === 0) {
-    return { path: '', lineCoords: [] };
+    return { pathD: '', lineCoords: [] };
   }
   const lats = all.map((p) => p.lat);
   const lngs = all.map((p) => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const rangeLat = maxLat - minLat || 1e-6;
-  const rangeLng = maxLng - minLng || 1e-6;
+  let minLat = Math.min(...lats);
+  let maxLat = Math.max(...lats);
+  let minLng = Math.min(...lngs);
+  let maxLng = Math.max(...lngs);
+  // Prevent collapse when all points are nearly identical (path would be invisible)
+  const rangeLat = Math.max(maxLat - minLat, 5e-5);
+  const rangeLng = Math.max(maxLng - minLng, 5e-5);
+  const padLat = (rangeLat - (maxLat - minLat)) / 2;
+  const padLng = (rangeLng - (maxLng - minLng)) / 2;
+  minLat -= padLat;
+  maxLat += padLat;
+  minLng -= padLng;
+  maxLng += padLng;
   const innerW = width - 2 * pad;
   const innerH = height - 2 * pad;
   const scale = Math.min(innerW / rangeLng, innerH / rangeLat);
@@ -99,7 +106,7 @@ export function TrackPreview({
 
   return (
     <View style={styles.wrapper}>
-      <Svg width={WIDTH} height={HEIGHT} style={styles.svg}>
+      <Svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} style={styles.svg}>
         {pathD ? (
           <Path
             d={pathD}
@@ -142,8 +149,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 16,
+    minHeight: HEIGHT + 32,
   },
   svg: {
+    width: WIDTH,
+    height: HEIGHT,
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     borderWidth: 1,

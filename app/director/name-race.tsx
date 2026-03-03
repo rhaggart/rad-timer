@@ -18,6 +18,7 @@ export default function NameRaceScreen() {
   const [name, setName] = useState('');
   const [durationHours, setDurationHours] = useState('1');
   const [plan, setPlan] = useState<'free' | 'paid'>('free');
+  const [gpsSampling, setGpsSampling] = useState<'standard' | 'high'>('standard');
 
   const canProceed = name.trim().length > 0;
 
@@ -84,6 +85,43 @@ export default function NameRaceScreen() {
           </Text>
         )}
 
+        <Text style={[styles.label, { marginTop: 24 }]}>GPS accuracy</Text>
+        <View style={styles.expiryRow}>
+          {[
+            { value: 'standard' as const, label: 'Standard', sub: '1 sec, better battery' },
+            { value: 'high' as const, label: 'High', sub: '¼ sec, more accurate, drains battery' },
+          ].map(({ value, label, sub }) => (
+            <Pressable
+              key={value}
+              style={[
+                styles.gpsChip,
+                gpsSampling === value && styles.expiryChipActive,
+              ]}
+              onPress={() => setGpsSampling(value)}
+            >
+              <Text
+                style={[
+                  styles.expiryChipText,
+                  gpsSampling === value && styles.expiryChipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+              <Text
+                style={[
+                  styles.gpsChipSub,
+                  gpsSampling === value && styles.gpsChipSubActive,
+                ]}
+              >
+                {sub}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.planHint}>
+          Use High for short races when you need the most accurate times.
+        </Text>
+
         <Text style={[styles.label, { marginTop: 24 }]}>
           Submissions close after
         </Text>
@@ -124,6 +162,7 @@ export default function NameRaceScreen() {
                 raceName: name.trim(),
                 durationHours,
                 plan: plan === 'paid' ? 'paid' : 'free',
+                gpsSampling,
               },
             })
           }
@@ -237,5 +276,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textLight,
     marginTop: 8,
+  },
+  gpsChip: {
+    flex: 1,
+    minWidth: 120,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  gpsChipSub: {
+    fontSize: 11,
+    color: Colors.textLight,
+    marginTop: 2,
+  },
+  gpsChipSubActive: {
+    color: 'rgba(255,255,255,0.85)',
   },
 });

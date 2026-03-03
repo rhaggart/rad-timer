@@ -1,6 +1,7 @@
+/** Denver Broncos orange */
 export const Colors = {
-  primary: '#FF4500',
-  primaryDark: '#CC3700',
+  primary: '#FB4F14',
+  primaryDark: '#C93F10',
   secondary: '#1a1a2e',
   secondaryLight: '#2d2d44',
   background: '#f5f5f7',

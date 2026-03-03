@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import MapView, { Polyline, Region } from 'react-native-maps';
+import MapView, { Polyline, Region, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Colors } from '../../../utils/colors';
 import { api } from '../../../services/api';
@@ -73,6 +73,7 @@ export default function RaceMapScreen() {
   const mapRef = useRef<MapView>(null);
   const [race, setRace] = useState<RaceSession | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -80,30 +81,37 @@ export default function RaceMapScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const [raceRes, { status }] = await Promise.all([
-          api.getRace(id),
-          Location.getForegroundPermissionsAsync(),
-        ]);
+        const raceRes = await api.getRace(id);
         if (cancelled) return;
         setRace(raceRes);
+
+        const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== 'granted') {
-          if (raceRes.startLine || raceRes.finishLine || (raceRes.stages?.length ?? 0) > 0) {
+          const { status: requested } = await Location.requestForegroundPermissionsAsync();
+          if (cancelled) return;
+          if (requested !== 'granted') {
             const b = getBounds(raceRes, raceRes.startCoords?.lat ?? 0, raceRes.startCoords?.lng ?? 0);
             setRegion(boundsToRegion(b));
+            setLoading(false);
+            return;
           }
-          setLoading(false);
-          return;
         }
+
         const loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
         if (cancelled) return;
         const userLat = loc.coords.latitude;
         const userLng = loc.coords.longitude;
+        setUserLocation({ latitude: userLat, longitude: userLng });
         const b = getBounds(raceRes, userLat, userLng);
         setRegion(boundsToRegion(b));
       } catch {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && raceRes) {
+          const fallbackLat = raceRes.startCoords?.lat ?? 0;
+          const fallbackLng = raceRes.startCoords?.lng ?? 0;
+          setRegion(boundsToRegion(getBounds(raceRes, fallbackLat, fallbackLng)));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -144,10 +152,18 @@ export default function RaceMapScreen() {
           ref={mapRef}
           style={styles.map}
           initialRegion={region}
-          showsUserLocation
-          showsMyLocationButton
+          showsUserLocation={true}
+          showsMyLocationButton={true}
+          followsUserLocation={false}
           mapType={Platform.OS === 'android' ? 'terrain' : 'hybrid'}
         >
+          {userLocation && (
+            <Marker
+              coordinate={userLocation}
+              title="You are here"
+              pinColor={Colors.primary}
+            />
+          )}
           {hasStages &&
             (race.stages as StageSegment[]).map((stage, i) => (
               <React.Fragment key={i}>

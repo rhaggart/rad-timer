@@ -29,6 +29,8 @@ interface CreateRaceBody {
   plan?: 'free' | 'paid';
   /** Multi-stage: each stage has its own start and finish. Requires plan === 'paid'. */
   stages?: StageBody[];
+  /** 'high' = ¼ s GPS sampling (drains battery). Default 'standard' = 1 s. */
+  gpsSampling?: 'standard' | 'high';
 }
 
 function isLineSegment(x: unknown): x is LineSegmentBody {
@@ -126,6 +128,7 @@ export async function handler(
     if (startLine) item.startLine = startLine;
     if (finishLine) item.finishLine = finishLine;
     if (stages != null && stages.length > 0) item.stages = stages;
+    item.gpsSampling = body.gpsSampling === 'high' ? 'high' : 'standard';
 
     await docClient.send(
       new PutCommand({ TableName: TABLE_SESSIONS, Item: item }),

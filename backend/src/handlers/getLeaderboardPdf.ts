@@ -3,7 +3,9 @@ import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, TABLE_SESSIONS, TABLE_RESULTS } from '../utils/db';
 import PDFDocument from 'pdfkit';
 
-function formatMs(ms: number): string {
+/** Format time: accepts ms or seconds (if value < 1000, treat as seconds). */
+function formatTime(value: number): string {
+  const ms = value >= 1000 ? value : value * 1000;
   const sec = Math.floor(ms / 1000);
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -58,13 +60,14 @@ function buildPdf(
 
     results.forEach((r, idx) => {
       const y = doc.y;
+      const nameStr = String(r.participantName ?? '').slice(0, 40) + (r.attemptNumber && r.attemptNumber > 1 ? ` (#${r.attemptNumber})` : '');
       doc.text(String(idx + 1), 50, y, { width: colWidths[0] });
-      doc.text(r.participantName + (r.attemptNumber && r.attemptNumber > 1 ? ` (#${r.attemptNumber})` : ''), 50 + colWidths[0], y, { width: colWidths[1] });
-      doc.text(formatMs(r.elapsedTime), 50 + colWidths[0] + colWidths[1], y, { width: colWidths[2] });
+      doc.text(nameStr, 50 + colWidths[0], y, { width: colWidths[1] });
+      doc.text(formatTime(Number(r.elapsedTime) || 0), 50 + colWidths[0] + colWidths[1], y, { width: colWidths[2] });
       xStage = 50 + colWidths[0] + colWidths[1] + colWidths[2];
-      if (r.stageTimes) {
+      if (r.stageTimes && Array.isArray(r.stageTimes)) {
         for (const t of r.stageTimes) {
-          doc.text(formatMs(t), xStage, y, { width: stageColWidth });
+          doc.text(formatTime(Number(t) || 0), xStage, y, { width: stageColWidth });
           xStage += stageColWidth;
         }
       }
@@ -105,17 +108,18 @@ export async function handler(
         ScanIndexForward: true,
       }),
     );
-    const results = (resultsResponse.Items ?? []).map((r) => ({
-      participantName: (r as { participantName?: string }).participantName ?? '',
-      elapsedTime: Number((r as { elapsedTime?: number }).elapsedTime ?? 0),
-      attemptNumber: (r as { attemptNumber?: number }).attemptNumber,
-      stageTimes: (r as { stageTimes?: number[] }).stageTimes,
+    const rawItems = resultsResponse.Items ?? [];
+    const results = rawItems.map((r: Record<string, unknown>) => ({
+      participantName: String(r.participantName ?? ''),
+      elapsedTime: Number(r.elapsedTime ?? 0),
+      attemptNumber: r.attemptNumber != null ? Number(r.attemptNumber) : undefined,
+      stageTimes: Array.isArray(r.stageTimes) ? r.stageTimes.map((t: unknown) => Number(t)) : undefined,
     }));
     const stageCount = Array.isArray(race.stages) ? race.stages.length : 0;
 
     const pdfBuffer = await buildPdf(
-      race.name ?? 'Race',
-      race.createdAt ?? '',
+      String(race.name ?? 'Race'),
+      String(race.createdAt ?? ''),
       results,
       stageCount,
     );
@@ -131,7 +135,12 @@ export async function handler(
       isBase64Encoded: true,
     };
   } catch (err) {
-    console.error('getLeaderboardPdf error:', err);
-    return { statusCode: 500, body: 'Internal server error' };
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('getLeaderboardPdf error:', message, err);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Internal server error', detail: message }),
+    };
   }
 }

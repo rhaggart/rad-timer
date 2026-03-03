@@ -56,7 +56,7 @@ export default function InviteScreen() {
           onPress={() =>
             router.push({
               pathname: '/racer/enter-name',
-              params: { raceId: id, raceName },
+              params: { raceId: id, raceName, isDirector: '1' },
             })
           }
         >

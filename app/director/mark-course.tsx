@@ -16,6 +16,7 @@ import { Colors } from '../../utils/colors';
 import { segmentFromCenter } from '../../utils/geo';
 import type { LineSegment, StageSegment } from '../../services/api';
 import { api } from '../../services/api';
+import { addCreatedRaceId } from '../../utils/myRacesStore';
 
 const DEFAULT_ANGLE = 90;
 type Coord = { lat: number; lng: number };
@@ -49,10 +50,11 @@ function formatCoord(value: number, type: 'lat' | 'lng'): string {
 
 export default function MarkCourseScreen() {
   const router = useRouter();
-  const { raceName, durationHours, plan: planParam } = useLocalSearchParams<{
+  const { raceName, durationHours, plan: planParam, gpsSampling } = useLocalSearchParams<{
     raceName: string;
     durationHours: string;
     plan?: string;
+    gpsSampling?: string;
   }>();
   const isPaid = planParam === 'paid';
 
@@ -150,6 +152,19 @@ export default function MarkCourseScreen() {
     }
   };
 
+  // When finish line is first set, fit map to both lines so the red line appears immediately
+  useEffect(() => {
+    if (!isPaid && finishLine && startLine && mapRef.current) {
+      const coords = [
+        { latitude: startLine.lat1, longitude: startLine.lng1 },
+        { latitude: startLine.lat2, longitude: startLine.lng2 },
+        { latitude: finishLine.lat1, longitude: finishLine.lng1 },
+        { latitude: finishLine.lat2, longitude: finishLine.lng2 },
+      ];
+      mapRef.current.fitToCoordinates(coords, { edgePadding: { top: 60, right: 60, bottom: 60, left: 60 }, animated: true });
+    }
+  }, [isPaid, finishLine, startLine]);
+
   const captureStageStart = (idx: number) => {
     if (currentLocation) {
       setStages((prev) => {
@@ -220,7 +235,9 @@ export default function MarkCourseScreen() {
           plan: 'paid',
           durationHours: Number(durationHours) || 24,
           stages: segs,
+          gpsSampling: gpsSampling === 'high' ? 'high' : 'standard',
         });
+        await addCreatedRaceId(race.raceId);
         router.replace({
           pathname: '/race/[id]/invite',
           params: { id: race.raceId, raceName: race.name },
@@ -234,7 +251,9 @@ export default function MarkCourseScreen() {
           finishCoords: finishCenter,
           durationHours: Number(durationHours) || 24,
           plan: 'free',
+          gpsSampling: gpsSampling === 'high' ? 'high' : 'standard',
         });
+        await addCreatedRaceId(race.raceId);
         router.replace({
           pathname: '/race/[id]/invite',
           params: { id: race.raceId, raceName: race.name },
@@ -346,6 +365,7 @@ export default function MarkCourseScreen() {
             ))}
           {!isPaid && startLine && (
             <Polyline
+              key={`start-${startCenter?.lat}-${startCenter?.lng}-${startAngle}-${startLengthMeters}`}
               coordinates={[
                 { latitude: startLine.lat1, longitude: startLine.lng1 },
                 { latitude: startLine.lat2, longitude: startLine.lng2 },
@@ -356,6 +376,7 @@ export default function MarkCourseScreen() {
           )}
           {!isPaid && finishLine && (
             <Polyline
+              key={`finish-${finishCenter?.lat}-${finishCenter?.lng}-${finishAngle}-${finishLengthMeters}`}
               coordinates={[
                 { latitude: finishLine.lat1, longitude: finishLine.lng1 },
                 { latitude: finishLine.lat2, longitude: finishLine.lng2 },

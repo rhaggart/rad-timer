@@ -28,7 +28,7 @@ export function useGPSRecording() {
   const [error, setError] = useState<string | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startTracking = useCallback(async () => {
+  const startTracking = useCallback(async (highAccuracy = false) => {
     try {
       setError(null);
       setPoints([]);
@@ -44,7 +44,7 @@ export function useGPSRecording() {
       const { status: background } =
         await Location.getBackgroundPermissionsAsync();
       if (background === 'granted') {
-        await doStartLocationUpdates();
+        await doStartLocationUpdates(highAccuracy);
         return;
       }
 
@@ -70,14 +70,23 @@ export function useGPSRecording() {
     }
   }, []);
 
-  const doStartLocationUpdates = async () => {
+  const doStartLocationUpdates = async (highAccuracy = false) => {
     try {
-      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 500,
-        distanceInterval: 1,
-        showsBackgroundLocationIndicator: true,
-      });
+      if (highAccuracy) {
+        await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 250,
+          distanceInterval: 0.5,
+          showsBackgroundLocationIndicator: true,
+        });
+      } else {
+        await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 1000,
+          distanceInterval: 1,
+          showsBackgroundLocationIndicator: true,
+        });
+      }
       setState('recording');
       pollIntervalRef.current = setInterval(() => {
         const count = getBackgroundLocationPointCount();
@@ -135,6 +144,17 @@ export function useGPSRecording() {
     setError(null);
   }, []);
 
+  /** Restore a draft track (e.g. after director navigated away). Puts hook in 'stopped' with these points. */
+  const loadDraft = useCallback((draftPoints: Array<{ lat: number; lng: number; timestamp: number }>) => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    setPoints(draftPoints.length >= 2 ? draftPoints : []);
+    setState(draftPoints.length >= 2 ? 'stopped' : 'idle');
+    setError(null);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) {
@@ -151,5 +171,6 @@ export function useGPSRecording() {
     startRecording: startTracking,
     stopRecording,
     reset,
+    loadDraft,
   };
 }

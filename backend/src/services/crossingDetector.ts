@@ -72,6 +72,11 @@ function segmentToLine(seg: LineSegment): LineStringFeature {
 
 /**
  * Find the interpolated timestamp when the track crosses a gate line.
+ * Time is interpolated between the two points that bracket the crossing.
+ * Two devices can report different times (often 0.5–2s) because:
+ * - Each device samples GPS at different moments (e.g. every 250–500ms).
+ * - The crossing moment falls between different sample pairs on each device.
+ * Higher sampling rate on the app reduces this variance.
  */
 function findCrossingTime(
   points: GPSPoint[],

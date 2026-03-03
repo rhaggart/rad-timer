@@ -29,6 +29,8 @@ interface RaceSession {
   status: 'open' | 'closed';
   plan?: 'free' | 'paid';
   stages?: StageSegment[];
+  /** 'high' = ¼ s sampling (drains battery). Omitted or 'standard' = 1 s. */
+  gpsSampling?: 'standard' | 'high';
 }
 
 interface CreateRaceParams {
@@ -41,17 +43,24 @@ interface CreateRaceParams {
   durationHours?: number;
   plan?: 'free' | 'paid';
   stages?: StageSegment[];
+  gpsSampling?: 'standard' | 'high';
 }
 
 interface UploadTrackParams {
   participantName: string;
   points: Array<{ lat: number; lng: number; timestamp: number }>;
+  /** True if any point used device time fallback instead of GPS timestamp. */
+  timestampFallback?: boolean;
 }
 
 interface UploadResult {
   resultId: string;
   elapsedTime: number;
   attemptNumber: number;
+  startTime?: number;
+  finishTime?: number;
+  timestampFallback?: boolean;
+  gpsSampling?: 'standard' | 'high';
 }
 
 interface LeaderboardEntry {
@@ -61,6 +70,13 @@ interface LeaderboardEntry {
   uploadedAt: string;
   attemptNumber: number;
   stageTimes?: number[];
+  /** Timing debug: crossing timestamps (ms). */
+  startTime?: number;
+  finishTime?: number;
+  /** True if device time fallback was used; time may be less comparable. */
+  timestampFallback?: boolean;
+  /** GPS mode used for this result. */
+  gpsSampling?: 'standard' | 'high';
 }
 
 interface LeaderboardResponse {

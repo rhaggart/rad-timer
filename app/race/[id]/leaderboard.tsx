@@ -14,7 +14,7 @@ import Constants from 'expo-constants';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../../utils/colors';
 import { api, LeaderboardEntry, RaceSession } from '../../../services/api';
-import { formatElapsedTime } from '../../../utils/formatTime';
+import { formatElapsedTime, formatDebugTimestamp } from '../../../utils/formatTime';
 
 interface RankedEntry extends LeaderboardEntry {
   rank: number;
@@ -23,7 +23,7 @@ interface RankedEntry extends LeaderboardEntry {
 
 export default function LeaderboardScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, participantName: currentParticipantName } = useLocalSearchParams<{ id: string; participantName?: string }>();
 
   const [race, setRace] = useState<RaceSession | null>(null);
   const [entries, setEntries] = useState<RankedEntry[]>([]);
@@ -140,6 +140,16 @@ export default function LeaderboardScreen() {
                     </Text>
                   </View>
                 )}
+                {item.gpsSampling === 'high' && (
+                  <View style={styles.gpsBadge}>
+                    <Text style={styles.gpsBadgeText}>High GPS</Text>
+                  </View>
+                )}
+                {item.timestampFallback && (
+                  <View style={styles.fallbackBadge}>
+                    <Text style={styles.fallbackBadgeText}>⚠ device time</Text>
+                  </View>
+                )}
               </View>
               {race?.stages?.length && item.stageTimes && item.stageTimes.length > 0 && (
                 <View style={styles.stageTimesRow}>
@@ -150,10 +160,20 @@ export default function LeaderboardScreen() {
                   ))}
                 </View>
               )}
+              {item.startTime != null && item.finishTime != null && (
+                <Text style={styles.debugLine}>
+                  Start {formatDebugTimestamp(item.startTime)} → End {formatDebugTimestamp(item.finishTime)}
+                </Text>
+              )}
             </View>
-            <Text style={styles.time}>
-              {formatElapsedTime(item.elapsedTime)}
-            </Text>
+            <View style={styles.timeBlock}>
+              <Text style={[styles.time, item.timestampFallback && styles.timeFlagged]}>
+                {formatElapsedTime(item.elapsedTime)}
+              </Text>
+              {item.timestampFallback && (
+                <Text style={styles.flaggedHint}>may vary</Text>
+              )}
+            </View>
           </View>
         )}
       />
@@ -178,7 +198,7 @@ export default function LeaderboardScreen() {
           onPress={() =>
             router.push({
               pathname: '/racer/enter-name',
-              params: { raceId: id, raceName: race?.name },
+              params: { raceId: id, raceName: race?.name, participantName: currentParticipantName ?? '' },
             })
           }
         >
@@ -324,6 +344,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textLight,
     fontVariant: ['tabular-nums'],
+  },
+  gpsBadge: {
+    backgroundColor: Colors.primary,
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  gpsBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textOnPrimary,
+  },
+  fallbackBadge: {
+    backgroundColor: Colors.warning,
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  fallbackBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  debugLine: {
+    fontSize: 10,
+    color: Colors.textLight,
+    fontVariant: ['tabular-nums'],
+    marginTop: 4,
+  },
+  timeBlock: {
+    alignItems: 'flex-end',
+  },
+  timeFlagged: {
+    color: Colors.warning,
+  },
+  flaggedHint: {
+    fontSize: 9,
+    color: Colors.textLight,
+    marginTop: 2,
   },
   footer: {
     flexDirection: 'row',

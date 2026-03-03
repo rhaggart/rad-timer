@@ -56,6 +56,10 @@ export default function RootLayout() {
           name="race/[id]/map"
           options={{ title: 'Race on map', headerBackVisible: false }}
         />
+        <Stack.Screen
+          name="race/[id]/racer-home"
+          options={{ title: 'Race', headerBackVisible: false }}
+        />
       </Stack>
     </GestureHandlerRootView>
   );

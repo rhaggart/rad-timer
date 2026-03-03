@@ -14,6 +14,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import type { RaceSession } from '../../services/api';
 import { api } from '../../services/api';
 import { Colors } from '../../utils/colors';
+import { getMyRaceIds } from '../../utils/myRacesStore';
 
 function formatExpiry(expiresAt: string): string {
   const d = new Date(expiresAt);
@@ -29,16 +30,19 @@ function RaceRow({
   race,
   onPress,
   onDelete,
+  canDelete,
 }: {
   race: RaceSession;
   onPress: () => void;
   onDelete: () => void;
+  canDelete: boolean;
 }) {
-  const renderRightActions = () => (
-    <Pressable style={styles.deleteAction} onPress={onDelete}>
-      <Text style={styles.deleteActionText}>Delete</Text>
-    </Pressable>
-  );
+  const renderRightActions = () =>
+    canDelete ? (
+      <Pressable style={styles.deleteAction} onPress={onDelete}>
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </Pressable>
+    ) : null;
 
   return (
     <Swipeable
@@ -51,7 +55,9 @@ function RaceRow({
           <Text style={styles.rowTitle} numberOfLines={1}>
             {race.name}
           </Text>
-          <Text style={styles.rowSubtitle}>{formatExpiry(race.expiresAt)}</Text>
+          {race.plan !== 'paid' && (
+            <Text style={styles.rowSubtitle}>{formatExpiry(race.expiresAt)}</Text>
+          )}
         </View>
         <Text style={styles.chevron}>›</Text>
       </Pressable>
@@ -62,6 +68,8 @@ function RaceRow({
 export default function RunningRacesScreen() {
   const router = useRouter();
   const [races, setRaces] = useState<RaceSession[]>([]);
+  const [createdIds, setCreatedIds] = useState<string[]>([]);
+  const [joinedIds, setJoinedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -69,8 +77,14 @@ export default function RunningRacesScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const { races: list } = await api.listRaces();
-      setRaces(list);
+      const [{ created, joined }, { races: list }] = await Promise.all([
+        getMyRaceIds(),
+        api.listRaces(),
+      ]);
+      setCreatedIds(created);
+      setJoinedIds(joined);
+      const myIds = new Set([...created, ...joined]);
+      setRaces(list.filter((r) => myIds.has(r.raceId)));
     } catch (err) {
       Alert.alert(
         'Error',
@@ -86,6 +100,24 @@ export default function RunningRacesScreen() {
     useCallback(() => {
       load();
     }, [load]),
+  );
+
+  const handleRacePress = useCallback(
+    (race: RaceSession) => {
+      const isDirector = createdIds.includes(race.raceId);
+      if (isDirector) {
+        router.push({
+          pathname: '/race/[id]/invite',
+          params: { id: race.raceId, raceName: race.name },
+        });
+      } else {
+        router.push({
+          pathname: '/race/[id]/racer-home',
+          params: { id: race.raceId, raceName: race.name },
+        });
+      }
+    },
+    [createdIds, router],
   );
 
   const handleDelete = useCallback(
@@ -148,13 +180,9 @@ export default function RunningRacesScreen() {
       renderItem={({ item }) => (
         <RaceRow
           race={item}
-          onPress={() =>
-            router.push({
-              pathname: '/race/[id]/invite',
-              params: { id: item.raceId, raceName: item.name },
-            })
-          }
+          onPress={() => handleRacePress(item)}
           onDelete={() => handleDelete(item)}
+          canDelete={createdIds.includes(item.raceId)}
         />
       )}
     />
