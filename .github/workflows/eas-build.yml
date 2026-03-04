@@ -29,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Build iOS on EAS
-        run: npx eas build --platform ios --profile production --non-interactive --auto-submit
+        run: npx eas-cli@latest build --platform ios --profile production --non-interactive --auto-submit
 
       - name: Build Android on EAS (clear cache to avoid variant/AGP issues)
-        run: npx eas build --platform android --profile production --non-interactive --auto-submit --clear-cache
+        run: npx eas-cli@latest build --platform android --profile production --non-interactive --auto-submit --clear-cache
