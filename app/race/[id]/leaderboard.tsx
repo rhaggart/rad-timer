@@ -15,6 +15,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../../utils/colors';
 import { api, LeaderboardEntry, RaceSession } from '../../../services/api';
 import { formatElapsedTime, formatDebugTimestamp } from '../../../utils/formatTime';
+import { getLastParticipantName, setLastParticipantName } from '../../../utils/myRacesStore';
+import { getRecoveryTrack } from '../../../utils/recoveryTrackStore';
+import { getPendingUploads, getPendingForRace } from '../../../utils/pendingUploadStore';
 
 interface RankedEntry extends LeaderboardEntry {
   rank: number;
@@ -29,6 +32,24 @@ export default function LeaderboardScreen() {
   const [entries, setEntries] = useState<RankedEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  /** Participant name to pass when racing again (from params or stored so name can be locked). */
+  const [savedParticipantName, setSavedParticipantName] = useState('');
+  /** Unfinished track (recovery or pending upload) so user can go to record and upload. */
+  const [unfinishedTrack, setUnfinishedTrack] = useState<{
+    participantName: string;
+    raceName: string;
+    isDirector: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    if (currentParticipantName?.trim()) {
+      setLastParticipantName(id, currentParticipantName.trim());
+      setSavedParticipantName(currentParticipantName.trim());
+    } else {
+      getLastParticipantName(id).then(setSavedParticipantName);
+    }
+  }, [id, currentParticipantName]);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -61,6 +82,31 @@ export default function LeaderboardScreen() {
     await fetchData();
     setRefreshing(false);
   }, [fetchData]);
+
+  // Check for unfinished track (recovery or pending upload) so we can show "Upload your track"
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      const recovery = await getRecoveryTrack(id);
+      if (recovery) {
+        setUnfinishedTrack({
+          participantName: recovery.participantName,
+          raceName: recovery.raceName,
+          isDirector: !!recovery.isDirector,
+        });
+        return;
+      }
+      const all = await getPendingUploads();
+      const forRace = getPendingForRace(id, all);
+      if (forRace.length > 0)
+        setUnfinishedTrack({
+          participantName: forRace[0].participantName,
+          raceName: race?.name ?? '',
+          isDirector: false,
+        });
+      else setUnfinishedTrack(null);
+    })();
+  }, [id, race?.name]);
 
   const handleShare = async () => {
     const url = `https://radtimer.com/join/${id}`;
@@ -184,6 +230,24 @@ export default function LeaderboardScreen() {
       />
 
       <View style={styles.footer}>
+        {unfinishedTrack && (
+          <Pressable
+            style={styles.uploadTrackButton}
+            onPress={() =>
+              router.push({
+                pathname: '/race/[id]/record',
+                params: {
+                  id: id!,
+                  participantName: unfinishedTrack.participantName,
+                  raceName: unfinishedTrack.raceName,
+                  isDirector: unfinishedTrack.isDirector ? '1' : '',
+                },
+              })
+            }
+          >
+            <Text style={styles.uploadTrackButtonText}>Upload your track</Text>
+          </Pressable>
+        )}
         {race?.plan === 'paid' && (
           <Pressable
             style={styles.pdfButton}
@@ -203,7 +267,11 @@ export default function LeaderboardScreen() {
           onPress={() =>
             router.push({
               pathname: '/racer/enter-name',
-              params: { raceId: id, raceName: race?.name, participantName: currentParticipantName ?? '' },
+              params: {
+                raceId: id,
+                raceName: race?.name,
+                participantName: (currentParticipantName ?? savedParticipantName)?.trim() ?? '',
+              },
             })
           }
         >
@@ -407,8 +475,18 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
     backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  },
+  uploadTrackButton: {
+    width: '100%',
+    backgroundColor: Colors.finishRed,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  uploadTrackButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textOnPrimary,
   },
   pdfButton: {
     width: '100%',

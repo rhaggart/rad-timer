@@ -50,3 +50,25 @@ export function isDirector(raceId: string, created: string[]): boolean {
 export function isRacerOnly(raceId: string, created: string[], joined: string[]): boolean {
   return joined.includes(raceId) && !created.includes(raceId);
 }
+
+const KEY_LAST_PARTICIPANT_PREFIX = '@radtimer/last_participant/';
+
+/** Get last used participant name for a race (for locking name when racing again from results). */
+export async function getLastParticipantName(raceId: string): Promise<string> {
+  try {
+    const raw = await storageGetItem(KEY_LAST_PARTICIPANT_PREFIX + raceId);
+    return raw?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Save participant name when viewing results so "Race Again" can lock the name. */
+export async function setLastParticipantName(raceId: string, name: string): Promise<void> {
+  if (!name?.trim()) return;
+  try {
+    await storageSetItem(KEY_LAST_PARTICIPANT_PREFIX + raceId, name.trim());
+  } catch {
+    // ignore
+  }
+}

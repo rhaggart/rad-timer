@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.radtimer.app",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "associatedDomains": [
         "applinks:radtimer.com"
       ],
@@ -31,7 +31,7 @@
     },
     "android": {
       "package": "com.radtimer.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "adaptiveIcon": {
         "backgroundColor": "#FB4F14",
         "foregroundImage": "./assets/android-icon-foreground.png",

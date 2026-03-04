@@ -8,6 +8,7 @@ import {
   Alert,
   Linking,
   ScrollView,
+  AppState,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
@@ -26,6 +27,11 @@ import {
   type PendingUpload,
 } from '../../../utils/pendingUploadStore';
 import { setActiveRecord, clearActiveRecord } from '../../../utils/activeRecordStore';
+import {
+  getRecoveryTrack,
+  setRecoveryTrack,
+  clearRecoveryTrack,
+} from '../../../utils/recoveryTrackStore';
 
 export default function RecordScreen() {
   const router = useRouter();
@@ -55,6 +61,18 @@ export default function RecordScreen() {
     }
   }, [id]);
 
+  // Restore recovered track when returning after app closed / phone died (racer or director).
+  // Run before director draft effect so we can skip recovery when director has in-memory draft.
+  useEffect(() => {
+    if (!id) return;
+    const hadDraft = isDirector && (getDraftTrack(id)?.length ?? 0) >= 2;
+    getRecoveryTrack(id).then((recovery) => {
+      if (!recovery || recovery.points.length < 2) return;
+      if (hadDraft) return;
+      loadDraft(recovery.points);
+    });
+  }, [id, isDirector, loadDraft]);
+
   // Restore director's draft track when they return (e.g. after "I'm racing too" -> left -> back)
   useEffect(() => {
     if (!id || !isDirector) return;
@@ -64,6 +82,52 @@ export default function RecordScreen() {
       clearDraftTrack(id);
     }
   }, [id, isDirector, loadDraft]);
+
+  // Persist recovery when we have a track that isn't uploaded yet (so user can return after close/crash)
+  useEffect(() => {
+    if (!id || state !== 'stopped' || points.length < 2 || uploadSuccess) return;
+    const timestampFallback = points.some(
+      (p) => (p as { timestampFallback?: boolean }).timestampFallback,
+    );
+    setRecoveryTrack(id, {
+      participantName: participantName ?? '',
+      raceName: raceName ?? '',
+      isDirector: isDirector || undefined,
+      points: points.map(({ lat, lng, timestamp }) => ({ lat, lng, timestamp })),
+      timestampFallback: timestampFallback || undefined,
+    });
+  }, [id, state, points, uploadSuccess, participantName, raceName, isDirector]);
+
+  // When app goes to background, persist current points so recovery works if app is killed
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'background') return;
+      if (!id) return;
+      const hasTrack =
+        (state === 'recording' && points.length >= 2) ||
+        (state === 'stopped' && points.length >= 2 && !uploadSuccess && !uploadFailed);
+      if (!hasTrack) return;
+      const pts = points.map(({ lat, lng, timestamp }) => ({ lat, lng, timestamp }));
+      const timestampFallback = points.some(
+        (p) => (p as { timestampFallback?: boolean }).timestampFallback,
+      );
+      setRecoveryTrack(id, {
+        participantName: participantName ?? '',
+        raceName: raceName ?? '',
+        isDirector: isDirector || undefined,
+        points: pts,
+        timestampFallback: timestampFallback || undefined,
+      });
+    });
+    return () => sub.remove();
+  }, [id, state, points, uploadSuccess, uploadFailed, participantName, raceName, isDirector]);
+
+  // Clear recovery once upload succeeds so we don't prompt again
+  useEffect(() => {
+    if (id && uploadSuccess) {
+      clearRecoveryTrack(id);
+    }
+  }, [id, uploadSuccess]);
 
   // Notify other screens that there's an active track (recording or not yet uploaded)
   useEffect(() => {
@@ -226,18 +290,33 @@ export default function RecordScreen() {
     router.replace('/');
   };
 
-  const showBackButton = uploadSuccess || isDirector;
+  const showBackButton = uploadSuccess || uploadFailed || isDirector;
   const hasActiveTrack =
     state === 'recording' ||
     (state === 'stopped' && !uploadSuccess && !uploadFailed && points.length >= 2);
 
+  const handleViewResults = () => {
+    if (!id) return;
+    router.push({
+      pathname: '/race/[id]/leaderboard',
+      params: { id, participantName: participantName ?? '' },
+    });
+  };
+
   return (
     <View style={styles.container}>
-      {showBackButton && (
-        <Pressable style={styles.returnButton} onPress={handleBack}>
-          <Text style={styles.returnButtonText}>← Back</Text>
-        </Pressable>
-      )}
+      <View style={styles.topBar}>
+        {showBackButton && (
+          <Pressable style={styles.returnButton} onPress={handleBack}>
+            <Text style={styles.returnButtonText}>← Back</Text>
+          </Pressable>
+        )}
+        {isDirector && id && (
+          <Pressable style={styles.viewResultsButton} onPress={handleViewResults}>
+            <Text style={styles.viewResultsButtonText}>View results</Text>
+          </Pressable>
+        )}
+      </View>
 
       <View style={styles.header}>
         <Text style={styles.raceName}>{raceName}</Text>
@@ -262,13 +341,13 @@ export default function RecordScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
-      <View style={[styles.statusCard, state === 'stopped' && points.length >= 2 && styles.statusCardWithPreview]}>
+      <View style={[styles.statusCard, state === 'stopped' && points.length >= 2 && !uploadFailed && styles.statusCardWithPreview]}>
         <Text style={styles.statusLabel}>
           {state === 'idle' && 'READY'}
           {state === 'recording' && 'TRACKING'}
-          {state === 'stopped' && 'TRACK RECORDED'}
+          {state === 'stopped' && (uploadFailed ? 'UPLOAD FAILED' : 'TRACK RECORDED')}
         </Text>
-        {state === 'stopped' && points.length >= 2 && (
+        {state === 'stopped' && points.length >= 2 && !uploadFailed && (
           <>
             <Text style={styles.trackPreviewTitle}>Your track</Text>
             <View style={styles.trackPreviewBox}>
@@ -369,15 +448,23 @@ export default function RecordScreen() {
               )}
             </Pressable>
             {uploadFailed && (
-              <Pressable
-                style={styles.startButton}
-                onPress={() => {
-                  setUploadFailed(false);
-                  reset();
-                }}
-              >
-                <Text style={styles.buttonText}>Start Tracking</Text>
-              </Pressable>
+              <>
+                <Pressable
+                  style={styles.startButton}
+                  onPress={() => {
+                    setUploadFailed(false);
+                    reset();
+                  }}
+                >
+                  <Text style={styles.buttonText}>Start Tracking</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.backToRaceButton}
+                  onPress={handleBack}
+                >
+                  <Text style={styles.backToRaceButtonText}>Back</Text>
+                </Pressable>
+              </>
             )}
           </>
         )}
@@ -557,13 +644,26 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     textDecorationLine: 'underline',
   },
-  returnButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 0,
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
+  returnButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+  },
   returnButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  viewResultsButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  viewResultsButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.primary,

@@ -74,19 +74,26 @@ function segmentToLine(seg: LineSegment): LineStringFeature {
 const CROSSING_FRACTION_MIN = 0.02;
 const CROSSING_FRACTION_MAX = 0.98;
 
+interface FindCrossingOptions {
+  /** If true, allow fraction 0 so "starting right on the start line" counts as a crossing. */
+  allowFractionZero?: boolean;
+}
+
 /**
  * Find the interpolated timestamp when the track crosses a gate line.
  * Time is interpolated between the two points that bracket the crossing.
  * We only count a crossing when the intersection is in the interior of the segment
- * (fraction between CROSSING_FRACTION_MIN and CROSSING_FRACTION_MAX), so that
- * "first point on start line" or "last point on finish line" does not count—
- * the path must actually cross through the line, not just touch it.
+ * (fraction between min and max), so that "last point on finish line" does not count—
+ * the path must actually cross through the line. For the start line we allow fraction 0
+ * so that starting with the first fix on the line counts.
  */
 function findCrossingTime(
   points: GPSPoint[],
   gateLine: LineStringFeature,
   startIndex = 0,
+  options: FindCrossingOptions = {},
 ): { timestamp: number; index: number } | null {
+  const minFrac = options.allowFractionZero ? 0 : CROSSING_FRACTION_MIN;
   for (let i = startIndex; i < points.length - 1; i++) {
     const segmentLine = turf.lineString([
       [points[i].lng, points[i].lat],
@@ -109,8 +116,7 @@ function findCrossingTime(
       );
 
       const fraction = dTotal > 0 ? dToCross / dTotal : 0;
-      // Require crossing in segment interior so we don't use "tap start/end" as race time
-      if (fraction < CROSSING_FRACTION_MIN || fraction > CROSSING_FRACTION_MAX) {
+      if (fraction < minFrac || fraction > CROSSING_FRACTION_MAX) {
         continue;
       }
 
@@ -145,7 +151,7 @@ export function detectCrossings(
   const startGate = toGateLine(start);
   const finishGate = toGateLine(finish);
 
-  const startCrossing = findCrossingTime(points, startGate);
+  const startCrossing = findCrossingTime(points, startGate, 0, { allowFractionZero: true });
   if (!startCrossing) {
     throw new Error(
       'Track did not cross the start line. Make sure you pass through the start point.',
@@ -201,7 +207,10 @@ export function detectMultipleLaps(
   let searchFrom = 0;
 
   while (true) {
-    const startCrossing = findCrossingTime(points, startGate, searchFrom);
+    // Allow fraction 0 for every start crossing so laps 2+ count when re-crossing at segment boundary
+    const startCrossing = findCrossingTime(points, startGate, searchFrom, {
+      allowFractionZero: true,
+    });
     if (!startCrossing) break;
 
     const finishCrossing = findCrossingTime(
@@ -257,7 +266,9 @@ export function detectMultiStageCrossings(
     const startGate = toGateLine(stage.start);
     const finishGate = toGateLine(stage.finish);
 
-    const startCrossing = findCrossingTime(points, startGate, currentIndex);
+    const startCrossing = findCrossingTime(points, startGate, currentIndex, {
+      allowFractionZero: i === 0 && currentIndex === 0,
+    });
     if (!startCrossing) {
       throw new Error(
         `Track did not cross stage ${i + 1} start line. Make sure you pass through the start.`,
