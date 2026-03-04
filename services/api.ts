@@ -69,6 +69,8 @@ interface LeaderboardEntry {
   elapsedTime: number;
   uploadedAt: string;
   attemptNumber: number;
+  /** Lap number within one upload (1, 2, 3 ... when track had multiple start→finish laps). */
+  lapNumber?: number;
   stageTimes?: number[];
   /** Timing debug: crossing timestamps (ms). */
   startTime?: number;

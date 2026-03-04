@@ -140,6 +140,11 @@ export default function LeaderboardScreen() {
                     </Text>
                   </View>
                 )}
+                {item.lapNumber != null && (
+                  <View style={styles.lapBadge}>
+                    <Text style={styles.lapBadgeText}>Lap {item.lapNumber}</Text>
+                  </View>
+                )}
                 {item.gpsSampling === 'high' && (
                   <View style={styles.gpsBadge}>
                     <Text style={styles.gpsBadgeText}>High GPS</Text>
@@ -309,6 +314,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   attemptBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textOnPrimary,
+  },
+  lapBadge: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  lapBadgeText: {
     fontSize: 11,
     fontWeight: '700',
     color: Colors.textOnPrimary,

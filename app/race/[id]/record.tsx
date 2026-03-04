@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
@@ -24,6 +25,7 @@ import {
   getPendingForRace,
   type PendingUpload,
 } from '../../../utils/pendingUploadStore';
+import { setActiveRecord, clearActiveRecord } from '../../../utils/activeRecordStore';
 
 export default function RecordScreen() {
   const router = useRouter();
@@ -62,6 +64,23 @@ export default function RecordScreen() {
       clearDraftTrack(id);
     }
   }, [id, isDirector, loadDraft]);
+
+  // Notify other screens that there's an active track (recording or not yet uploaded)
+  useEffect(() => {
+    const active =
+      state === 'recording' ||
+      (state === 'stopped' && !uploadSuccess && !uploadFailed && points.length >= 2);
+    if (id && active) {
+      setActiveRecord({
+        raceId: id,
+        participantName: participantName ?? '',
+        raceName: raceName ?? '',
+        ...(isDirector && { isDirector: true }),
+      });
+    } else {
+      clearActiveRecord();
+    }
+  }, [id, state, uploadSuccess, uploadFailed, points.length, participantName, raceName, isDirector]);
 
   // Load pending uploads for this race; try to upload once when we have connection
   useEffect(() => {
@@ -207,11 +226,18 @@ export default function RecordScreen() {
     router.replace('/');
   };
 
+  const showBackButton = uploadSuccess || isDirector;
+  const hasActiveTrack =
+    state === 'recording' ||
+    (state === 'stopped' && !uploadSuccess && !uploadFailed && points.length >= 2);
+
   return (
     <View style={styles.container}>
-      <Pressable style={styles.returnButton} onPress={handleBack}>
-        <Text style={styles.returnButtonText}>← Back</Text>
-      </Pressable>
+      {showBackButton && (
+        <Pressable style={styles.returnButton} onPress={handleBack}>
+          <Text style={styles.returnButtonText}>← Back</Text>
+        </Pressable>
+      )}
 
       <View style={styles.header}>
         <Text style={styles.raceName}>{raceName}</Text>
@@ -231,7 +257,12 @@ export default function RecordScreen() {
         </View>
       )}
 
-      <View style={styles.statusCard}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+      >
+      <View style={[styles.statusCard, state === 'stopped' && points.length >= 2 && styles.statusCardWithPreview]}>
         <Text style={styles.statusLabel}>
           {state === 'idle' && 'READY'}
           {state === 'recording' && 'TRACKING'}
@@ -239,22 +270,24 @@ export default function RecordScreen() {
         </Text>
         {state === 'stopped' && points.length >= 2 && (
           <>
-            <TrackPreview
-              key={`preview-${points.length}-${points[0]?.lat}-${points[points.length - 1]?.lat}`}
-              points={points}
-              startLine={
-                race?.startLine ??
-                (race?.stages?.length ? race.stages[0].startLine : null) ??
-                null
-              }
-              finishLine={
-                race?.finishLine ??
-                (race?.stages?.length ? race.stages[race.stages.length - 1].finishLine : null) ??
-                null
-              }
-            />
+            <Text style={styles.trackPreviewTitle}>Your track</Text>
+            <View style={styles.trackPreviewBox}>
+              <TrackPreview
+                points={points}
+                startLine={
+                  race?.startLine ??
+                  (race?.stages?.length ? race.stages[0].startLine : null) ??
+                  null
+                }
+                finishLine={
+                  race?.finishLine ??
+                  (race?.stages?.length ? race.stages[race.stages.length - 1].finishLine : null) ??
+                  null
+                }
+              />
+            </View>
             <Text style={styles.trackHint}>
-              Your path — green = start line, red = finish line
+              Green = start line, red = finish line. Verify you crossed both.
             </Text>
           </>
         )}
@@ -265,44 +298,44 @@ export default function RecordScreen() {
         )}
       </View>
 
-      {error && (
-        <View style={styles.errorCard}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable
-            style={styles.settingsLink}
-            onPress={() => Linking.openSettings()}
-          >
-            <Text style={styles.settingsLinkText}>Open Settings</Text>
-          </Pressable>
-        </View>
-      )}
+        {error && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable
+              style={styles.settingsLink}
+              onPress={() => Linking.openSettings()}
+            >
+              <Text style={styles.settingsLinkText}>Open Settings</Text>
+            </Pressable>
+          </View>
+        )}
 
-      {uploadSuccess && (
-        <View style={styles.successCard}>
-          <Text style={styles.successText}>Uploaded! See your time below or race again.</Text>
-        </View>
-      )}
+        {uploadSuccess && (
+          <View style={styles.successCard}>
+            <Text style={styles.successText}>Uploaded! See your time below or race again.</Text>
+          </View>
+        )}
 
-      {pendingForRace.length > 0 && (
-        <View style={styles.pendingCard}>
-          <Text style={styles.pendingText}>
-            {pendingForRace.length} track{pendingForRace.length > 1 ? 's' : ''} saved offline.
-          </Text>
-          <Pressable
-            style={[styles.retryButton, retryingPending && styles.buttonDisabled]}
-            onPress={tryPendingUploads}
-            disabled={retryingPending}
-          >
-            {retryingPending ? (
-              <ActivityIndicator color={Colors.textOnPrimary} size="small" />
-            ) : (
-              <Text style={styles.retryButtonText}>Retry upload</Text>
-            )}
-          </Pressable>
-        </View>
-      )}
+        {pendingForRace.length > 0 && (
+          <View style={styles.pendingCard}>
+            <Text style={styles.pendingText}>
+              {pendingForRace.length} track{pendingForRace.length > 1 ? 's' : ''} saved offline.
+            </Text>
+            <Pressable
+              style={[styles.retryButton, retryingPending && styles.buttonDisabled]}
+              onPress={tryPendingUploads}
+              disabled={retryingPending}
+            >
+              {retryingPending ? (
+                <ActivityIndicator color={Colors.textOnPrimary} size="small" />
+              ) : (
+                <Text style={styles.retryButtonText}>Retry upload</Text>
+              )}
+            </Pressable>
+          </View>
+        )}
 
-      <View style={styles.actions}>
+        <View style={styles.actions}>
         {state === 'idle' && !uploadSuccess && (
           <Pressable
             style={styles.startButton}
@@ -371,6 +404,7 @@ export default function RecordScreen() {
           </>
         )}
       </View>
+      </ScrollView>
     </View>
   );
 }
@@ -412,6 +446,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+  },
   statusCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
@@ -419,6 +459,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  statusCardWithPreview: {
+    minHeight: 260,
+  },
+  trackPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  trackPreviewBox: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    minHeight: 180,
   },
   statusLabel: {
     fontSize: 14,

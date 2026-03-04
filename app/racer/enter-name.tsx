@@ -75,14 +75,18 @@ export default function EnterNameScreen() {
 
         <Text style={styles.label}>Your Name</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, savedName && styles.inputDisabled]}
           placeholder="Enter your name"
           placeholderTextColor={Colors.textLight}
           value={name}
           onChangeText={setName}
-          autoFocus
+          editable={!savedName}
+          autoFocus={!savedName}
           maxLength={30}
         />
+        {savedName ? (
+          <Text style={styles.nameLockedHint}>Name is set for this race.</Text>
+        ) : null}
 
         <Pressable
           style={[styles.button, !canProceed && styles.buttonDisabled]}
@@ -165,6 +169,15 @@ const styles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  inputDisabled: {
+    backgroundColor: Colors.border,
+    color: Colors.textLight,
+  },
+  nameLockedHint: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 6,
   },
   button: {
     backgroundColor: Colors.startGreen,

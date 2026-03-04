@@ -10,7 +10,11 @@
     "preview": {
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EAS_BUILD_DISABLE_MAVEN_CACHE": "1"
+      }
+    }
   },
   "submit": {
     "production": {

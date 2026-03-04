@@ -70,13 +70,17 @@ function segmentToLine(seg: LineSegment): LineStringFeature {
   ]);
 }
 
+/** Minimum fraction along segment (0..1) for a valid crossing. Avoids counting "touch at endpoint" as a crossing. */
+const CROSSING_FRACTION_MIN = 0.02;
+const CROSSING_FRACTION_MAX = 0.98;
+
 /**
  * Find the interpolated timestamp when the track crosses a gate line.
  * Time is interpolated between the two points that bracket the crossing.
- * Two devices can report different times (often 0.5–2s) because:
- * - Each device samples GPS at different moments (e.g. every 250–500ms).
- * - The crossing moment falls between different sample pairs on each device.
- * Higher sampling rate on the app reduces this variance.
+ * We only count a crossing when the intersection is in the interior of the segment
+ * (fraction between CROSSING_FRACTION_MIN and CROSSING_FRACTION_MAX), so that
+ * "first point on start line" or "last point on finish line" does not count—
+ * the path must actually cross through the line, not just touch it.
  */
 function findCrossingTime(
   points: GPSPoint[],
@@ -105,6 +109,11 @@ function findCrossingTime(
       );
 
       const fraction = dTotal > 0 ? dToCross / dTotal : 0;
+      // Require crossing in segment interior so we don't use "tap start/end" as race time
+      if (fraction < CROSSING_FRACTION_MIN || fraction > CROSSING_FRACTION_MAX) {
+        continue;
+      }
+
       const timeDelta = points[i + 1].timestamp - points[i].timestamp;
       const crossTimestamp = points[i].timestamp + fraction * timeDelta;
 
@@ -165,6 +174,61 @@ export function detectCrossings(
     finishTime: finishCrossing.timestamp,
     elapsedTime,
   };
+}
+
+export interface LapResult {
+  startTime: number;
+  finishTime: number;
+  elapsedTime: number;
+}
+
+/**
+ * Detect all laps: each time the track crosses start then finish, count one lap.
+ * Returns one result per lap so multiple runs in one track appear as multiple times.
+ */
+export function detectMultipleLaps(
+  points: GPSPoint[],
+  start: StartFinishInput,
+  finish: StartFinishInput,
+): LapResult[] {
+  if (points.length < 2) {
+    throw new Error('Track must contain at least 2 GPS points');
+  }
+
+  const startGate = toGateLine(start);
+  const finishGate = toGateLine(finish);
+  const laps: LapResult[] = [];
+  let searchFrom = 0;
+
+  while (true) {
+    const startCrossing = findCrossingTime(points, startGate, searchFrom);
+    if (!startCrossing) break;
+
+    const finishCrossing = findCrossingTime(
+      points,
+      finishGate,
+      startCrossing.index,
+    );
+    if (!finishCrossing) break;
+
+    const elapsedTime = Math.round(finishCrossing.timestamp - startCrossing.timestamp);
+    if (elapsedTime <= 0) break;
+
+    laps.push({
+      startTime: startCrossing.timestamp,
+      finishTime: finishCrossing.timestamp,
+      elapsedTime,
+    });
+    searchFrom = finishCrossing.index;
+  }
+
+  if (laps.length === 0) {
+    throw new Error(
+      'Track did not cross the start line then the finish line. Make sure you pass through both.',
+    );
+  }
+
+  return laps;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   ScrollView,
+  InteractionManager,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
@@ -81,6 +82,35 @@ export default function MarkCourseScreen() {
       ? segmentFromCenter(finishCenter, finishAngle, finishLengthMeters)
       : null;
 
+  // Degenerate (zero-length) coords so we can keep Polylines mounted and avoid native crash when redoing
+  const freeStartPolylineCoords: Array<{ latitude: number; longitude: number }> = startLine
+    ? [
+        { latitude: startLine.lat1, longitude: startLine.lng1 },
+        { latitude: startLine.lat2, longitude: startLine.lng2 },
+      ]
+    : currentLocation
+      ? [
+          { latitude: currentLocation.lat, longitude: currentLocation.lng },
+          { latitude: currentLocation.lat, longitude: currentLocation.lng },
+        ]
+      : [{ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0 }];
+  const freeFinishPolylineCoords: Array<{ latitude: number; longitude: number }> = finishLine
+    ? [
+        { latitude: finishLine.lat1, longitude: finishLine.lng1 },
+        { latitude: finishLine.lat2, longitude: finishLine.lng2 },
+      ]
+    : startCenter
+      ? [
+          { latitude: startCenter.lat, longitude: startCenter.lng },
+          { latitude: startCenter.lat, longitude: startCenter.lng },
+        ]
+      : currentLocation
+        ? [
+            { latitude: currentLocation.lat, longitude: currentLocation.lng },
+            { latitude: currentLocation.lat, longitude: currentLocation.lng },
+          ]
+        : [{ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0 }];
+
   const stageSegments: (StageSegment | null)[] = stages.map((s) => {
     if (!s.startCenter || !s.finishCenter) return null;
     return {
@@ -152,6 +182,24 @@ export default function MarkCourseScreen() {
     }
   };
 
+  /** Redo start: remove the line and reset button to Create Start. Defer until after interactions to avoid native map crash. */
+  const redoStart = () => {
+    InteractionManager.runAfterInteractions(() => {
+      setStartCenter(null);
+      setStartAngle(DEFAULT_ANGLE);
+      setStartLengthMeters(DEFAULT_LENGTH_METERS);
+    });
+  };
+
+  /** Redo finish: remove the line and reset button to Create Finish. Defer until after interactions to avoid native map crash. */
+  const redoFinish = () => {
+    InteractionManager.runAfterInteractions(() => {
+      setFinishCenter(null);
+      setFinishAngle(DEFAULT_ANGLE);
+      setFinishLengthMeters(DEFAULT_LENGTH_METERS);
+    });
+  };
+
   // When finish line is first set, fit map to both lines so the red line appears immediately
   useEffect(() => {
     if (!isPaid && finishLine && startLine && mapRef.current) {
@@ -195,6 +243,30 @@ export default function MarkCourseScreen() {
   };
   const addStage = () => {
     setStages((prev) => [...prev, emptyStage()]);
+  };
+
+  /** Redo stage start: remove the line and reset button to Create Stage N Start. Defer until after interactions to avoid native map crash. */
+  const redoStageStart = (idx: number) => {
+    const i = idx;
+    InteractionManager.runAfterInteractions(() => {
+      setStages((prev) => {
+        const next = [...prev];
+        next[i] = { ...next[i], startCenter: null, startAngle: DEFAULT_ANGLE, startLengthMeters: DEFAULT_LENGTH_METERS };
+        return next;
+      });
+    });
+  };
+
+  /** Redo stage finish: remove the line and reset button to Create Stage N Finish. Defer until after interactions to avoid native map crash. */
+  const redoStageFinish = (idx: number) => {
+    const i = idx;
+    InteractionManager.runAfterInteractions(() => {
+      setStages((prev) => {
+        const next = [...prev];
+        next[i] = { ...next[i], finishCenter: null, finishAngle: DEFAULT_ANGLE, finishLengthMeters: DEFAULT_LENGTH_METERS };
+        return next;
+      });
+    });
   };
   const updateStageStartAngle = (idx: number, delta: number) => {
     setStages((prev) => {
@@ -300,90 +372,98 @@ export default function MarkCourseScreen() {
           mapType={mapType}
           followsUserLocation
         >
-          {!isPaid && startCenter && (
-            <Marker
-              coordinate={{ latitude: startCenter.lat, longitude: startCenter.lng }}
-              pinColor={Colors.startGreen}
-              title="Start"
-            />
-          )}
-          {!isPaid && finishCenter && (
-            <Marker
-              coordinate={{ latitude: finishCenter.lat, longitude: finishCenter.lng }}
-              pinColor={Colors.finishRed}
-              title="Finish"
-            />
+          {!isPaid && region && (
+            <>
+              <Marker
+                key="start-marker"
+                coordinate={{
+                  latitude: (startCenter ?? currentLocation)?.lat ?? region.latitude,
+                  longitude: (startCenter ?? currentLocation)?.lng ?? region.longitude,
+                }}
+                pinColor={Colors.startGreen}
+                title="Start"
+              />
+              <Marker
+                key="finish-marker"
+                coordinate={{
+                  latitude: (finishCenter ?? startCenter ?? currentLocation)?.lat ?? region.latitude,
+                  longitude: (finishCenter ?? startCenter ?? currentLocation)?.lng ?? region.longitude,
+                }}
+                pinColor={Colors.finishRed}
+                title="Finish"
+              />
+            </>
           )}
           {isPaid &&
-            stages.map((s, i) => (
-              <React.Fragment key={i}>
-                {s.startCenter && (
+            region &&
+            stages.map((s, i) => {
+              const startLine = s.startCenter ? segmentFromCenter(s.startCenter, s.startAngle, s.startLengthMeters) : null;
+              const finishLine = s.finishCenter ? segmentFromCenter(s.finishCenter, s.finishAngle, s.finishLengthMeters) : null;
+              const fallback: Coord = currentLocation ?? { lat: region.latitude, lng: region.longitude };
+              const startMarkerCoord = s.startCenter ?? s.finishCenter ?? fallback;
+              const finishMarkerCoord = s.finishCenter ?? s.startCenter ?? fallback;
+              const startPolylineCoords: Array<{ latitude: number; longitude: number }> = startLine
+                ? [
+                    { latitude: startLine.lat1, longitude: startLine.lng1 },
+                    { latitude: startLine.lat2, longitude: startLine.lng2 },
+                  ]
+                : [
+                    { latitude: fallback.lat, longitude: fallback.lng },
+                    { latitude: fallback.lat, longitude: fallback.lng },
+                  ];
+              const finishPolylineCoords: Array<{ latitude: number; longitude: number }> = finishLine
+                ? [
+                    { latitude: finishLine.lat1, longitude: finishLine.lng1 },
+                    { latitude: finishLine.lat2, longitude: finishLine.lng2 },
+                  ]
+                : [
+                    { latitude: fallback.lat, longitude: fallback.lng },
+                    { latitude: fallback.lat, longitude: fallback.lng },
+                  ];
+              return (
+                <React.Fragment key={i}>
                   <Marker
-                    coordinate={{ latitude: s.startCenter.lat, longitude: s.startCenter.lng }}
+                    key={`stage-${i}-start-marker`}
+                    coordinate={{ latitude: startMarkerCoord.lat, longitude: startMarkerCoord.lng }}
                     pinColor={Colors.startGreen}
                     title={`Stage ${i + 1} Start`}
                   />
-                )}
-                {s.finishCenter && (
                   <Marker
-                    coordinate={{ latitude: s.finishCenter.lat, longitude: s.finishCenter.lng }}
+                    key={`stage-${i}-finish-marker`}
+                    coordinate={{ latitude: finishMarkerCoord.lat, longitude: finishMarkerCoord.lng }}
                     pinColor={Colors.finishRed}
                     title={`Stage ${i + 1} Finish`}
                   />
-                )}
-                {s.startCenter &&
-                  (() => {
-                    const line = segmentFromCenter(s.startCenter, s.startAngle, s.startLengthMeters);
-                    return (
-                      <Polyline
-                        key={`s${i}`}
-                        coordinates={[
-                          { latitude: line.lat1, longitude: line.lng1 },
-                          { latitude: line.lat2, longitude: line.lng2 },
-                        ]}
-                        strokeColor={Colors.startGreen}
-                        strokeWidth={4}
-                      />
-                    );
-                  })()}
-                {s.finishCenter &&
-                  (() => {
-                    const line = segmentFromCenter(s.finishCenter, s.finishAngle, s.finishLengthMeters);
-                    return (
-                      <Polyline
-                        key={`f${i}`}
-                        coordinates={[
-                          { latitude: line.lat1, longitude: line.lng1 },
-                          { latitude: line.lat2, longitude: line.lng2 },
-                        ]}
-                        strokeColor={Colors.finishRed}
-                        strokeWidth={4}
-                      />
-                    );
-                  })()}
-              </React.Fragment>
-            ))}
-          {!isPaid && startLine && (
-            <Polyline
-              key={`start-${startCenter?.lat}-${startCenter?.lng}-${startAngle}-${startLengthMeters}`}
-              coordinates={[
-                { latitude: startLine.lat1, longitude: startLine.lng1 },
-                { latitude: startLine.lat2, longitude: startLine.lng2 },
-              ]}
-              strokeColor={Colors.startGreen}
-              strokeWidth={4}
-            />
-          )}
-          {!isPaid && finishLine && (
-            <Polyline
-              key={`finish-${finishCenter?.lat}-${finishCenter?.lng}-${finishAngle}-${finishLengthMeters}`}
-              coordinates={[
-                { latitude: finishLine.lat1, longitude: finishLine.lng1 },
-                { latitude: finishLine.lat2, longitude: finishLine.lng2 },
-              ]}
-              strokeColor={Colors.finishRed}
-              strokeWidth={4}
-            />
+                  <Polyline
+                    key={`stage-${i}-start-line`}
+                    coordinates={startPolylineCoords}
+                    strokeColor={Colors.startGreen}
+                    strokeWidth={4}
+                  />
+                  <Polyline
+                    key={`stage-${i}-finish-line`}
+                    coordinates={finishPolylineCoords}
+                    strokeColor={Colors.finishRed}
+                    strokeWidth={4}
+                  />
+                </React.Fragment>
+              );
+            })}
+          {!isPaid && (
+            <>
+              <Polyline
+                key="start-line"
+                coordinates={freeStartPolylineCoords}
+                strokeColor={Colors.startGreen}
+                strokeWidth={4}
+              />
+              <Polyline
+                key="finish-line"
+                coordinates={freeFinishPolylineCoords}
+                strokeColor={Colors.finishRed}
+                strokeWidth={4}
+              />
+            </>
           )}
         </MapView>
 
@@ -435,10 +515,10 @@ export default function MarkCourseScreen() {
                 <View style={styles.lineControls}>
                   <Pressable
                     style={[styles.captureButton, styles.startButton, styles.captureButtonInPanel]}
-                    onPress={() => captureStageStart(idx)}
-                    disabled={!currentLocation}
+                    onPress={stage.startCenter ? () => redoStageStart(idx) : () => captureStageStart(idx)}
+                    disabled={!currentLocation && !stage.startCenter}
                   >
-                    <Text style={styles.captureButtonText}>Create Stage {idx + 1} Start</Text>
+                    <Text style={styles.captureButtonText}>{stage.startCenter ? 'Redo Start' : `Create Stage ${idx + 1} Start`}</Text>
                   </Pressable>
                   {stage.startCenter && (
                     <>
@@ -473,10 +553,10 @@ export default function MarkCourseScreen() {
                 <View style={styles.lineControls}>
                   <Pressable
                     style={[styles.captureButton, styles.finishButton, styles.captureButtonInPanel]}
-                    onPress={() => captureStageFinish(idx)}
-                    disabled={!currentLocation}
+                    onPress={stage.finishCenter ? () => redoStageFinish(idx) : () => captureStageFinish(idx)}
+                    disabled={!currentLocation && !stage.finishCenter}
                   >
-                    <Text style={styles.captureButtonText}>Create Stage {idx + 1} Finish</Text>
+                    <Text style={styles.captureButtonText}>{stage.finishCenter ? 'Redo Finish' : `Create Stage ${idx + 1} Finish`}</Text>
                   </Pressable>
                   {stage.finishCenter && (
                     <>
@@ -519,10 +599,10 @@ export default function MarkCourseScreen() {
             <View style={styles.lineControls}>
               <Pressable
                 style={[styles.captureButton, styles.startButton, styles.captureButtonInPanel]}
-                onPress={captureStart}
-                disabled={!currentLocation}
+                onPress={startCenter ? redoStart : captureStart}
+                disabled={!currentLocation && !startCenter}
               >
-                <Text style={styles.captureButtonText}>Create Start</Text>
+                <Text style={styles.captureButtonText}>{startCenter ? 'Redo Start' : 'Create Start'}</Text>
               </Pressable>
               {startCenter && (
                 <>
@@ -557,10 +637,10 @@ export default function MarkCourseScreen() {
             <View style={styles.lineControls}>
               <Pressable
                 style={[styles.captureButton, styles.finishButton, styles.captureButtonInPanel]}
-                onPress={captureFinish}
-                disabled={!currentLocation}
+                onPress={finishCenter ? redoFinish : captureFinish}
+                disabled={!currentLocation && !finishCenter}
               >
-                <Text style={styles.captureButtonText}>Create Finish</Text>
+                <Text style={styles.captureButtonText}>{finishCenter ? 'Redo Finish' : 'Create Finish'}</Text>
               </Pressable>
               {finishCenter && (
                 <>
