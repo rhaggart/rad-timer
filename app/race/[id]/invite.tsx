@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Share, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { Colors } from '../../../utils/colors';
+import { getActiveRecord } from '../../../utils/activeRecordStore';
+import { getRecoveryTrack } from '../../../utils/recoveryTrackStore';
 
 export default function InviteScreen() {
   const router = useRouter();
@@ -9,6 +12,7 @@ export default function InviteScreen() {
     id: string;
     raceName: string;
   }>();
+  const [racingLoading, setRacingLoading] = useState(false);
 
   const joinUrl = `https://radtimer.com/join/${id}`;
 
@@ -52,13 +56,47 @@ export default function InviteScreen() {
         </Pressable>
 
         <Pressable
-          style={styles.racingButton}
-          onPress={() =>
-            router.push({
-              pathname: '/racer/enter-name',
-              params: { raceId: id, raceName, isDirector: '1' },
-            })
-          }
+          style={[styles.racingButton, racingLoading && styles.buttonDisabled]}
+          disabled={racingLoading}
+          onPress={async () => {
+            if (!id || !raceName) return;
+            setRacingLoading(true);
+            try {
+              const active = getActiveRecord();
+              const sameRaceWithName = active?.raceId === id && active?.participantName?.trim();
+              if (sameRaceWithName) {
+                router.push({
+                  pathname: '/race/[id]/record',
+                  params: {
+                    id,
+                    participantName: active.participantName.trim(),
+                    raceName: active.raceName ?? raceName,
+                    isDirector: '1',
+                  },
+                });
+                return;
+              }
+              const recovery = await getRecoveryTrack(id);
+              if (recovery?.participantName?.trim()) {
+                router.push({
+                  pathname: '/race/[id]/record',
+                  params: {
+                    id,
+                    participantName: recovery.participantName.trim(),
+                    raceName: recovery.raceName ?? raceName,
+                    isDirector: '1',
+                  },
+                });
+                return;
+              }
+              router.push({
+                pathname: '/racer/enter-name',
+                params: { raceId: id, raceName, isDirector: '1' },
+              });
+            } finally {
+              setRacingLoading(false);
+            }
+          }}
         >
           <Text style={styles.racingButtonText}>I'm Racing Too</Text>
         </Pressable>
@@ -150,6 +188,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   racingButtonText: {
     fontSize: 16,

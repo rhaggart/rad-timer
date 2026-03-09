@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../utils/colors';
 import type { ActiveRecord } from '../utils/activeRecordStore';
 import { getActiveRecord, subscribeActiveRecord } from '../utils/activeRecordStore';
@@ -8,6 +9,7 @@ import { getActiveRecord, subscribeActiveRecord } from '../utils/activeRecordSto
 export function ActiveRecordBanner() {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
   const [active, setActive] = useState<ActiveRecord | null>(getActiveRecord());
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function ActiveRecordBanner() {
   };
 
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, { paddingTop: 10 + insets.top, paddingBottom: 10 }]}>
       <Text style={styles.bannerText} numberOfLines={2}>
         You have a track in progress — finish and upload to save your time.
       </Text>
@@ -50,7 +52,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: Colors.warning,
-    paddingVertical: 10,
     paddingHorizontal: 16,
     gap: 12,
   },

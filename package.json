@@ -10,7 +10,7 @@
     "eas-logs": "node scripts/fetch-eas-logs.js"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^3.0.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.0",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",

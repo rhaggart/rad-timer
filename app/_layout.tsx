@@ -1,16 +1,17 @@
 import '../tasks/backgroundLocation'; // Register background location task at app load
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../utils/colors';
 import { ActiveRecordBanner } from '../components/ActiveRecordBanner';
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" />
-      <ActiveRecordBanner />
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <ActiveRecordBanner />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: Colors.secondary },
@@ -64,6 +65,7 @@ export default function RootLayout() {
           options={{ title: 'Race', headerBackVisible: false }}
         />
       </Stack>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

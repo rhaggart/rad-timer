@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Path, Line } from 'react-native-svg';
+import Svg, { Path, Line, Circle } from 'react-native-svg';
 import type { LineSegment } from '../services/api';
 
 const WIDTH = 280;
@@ -13,9 +13,19 @@ interface Point {
 }
 
 interface TrackPreviewProps {
-  points: Point[];
+  /** GPS points (may include timestamp or latitude/longitude); invalid points are filtered out. */
+  points: Array<{ lat?: number; lng?: number; latitude?: number; longitude?: number; timestamp?: number }>;
   startLine?: LineSegment | null;
   finishLine?: LineSegment | null;
+}
+
+function toPoint(p: { lat?: number; lng?: number; latitude?: number; longitude?: number }): Point | null {
+  const lat = Number(p?.lat ?? p?.latitude);
+  const lng = Number(p?.lng ?? p?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return null;
+  }
+  return { lat, lng };
 }
 
 function project(
@@ -27,21 +37,24 @@ function project(
 ): {
   pathD: string;
   lineCoords: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  singlePointCoord: { x: number; y: number } | null;
 } {
+  if (points.length === 0) {
+    return { pathD: '', lineCoords: [], singlePointCoord: null };
+  }
   const all: Point[] = [...points];
   lines.forEach(([a, b]) => {
     all.push(a, b);
   });
-  if (all.length === 0) {
-    return { pathD: '', lineCoords: [] };
-  }
   const lats = all.map((p) => p.lat);
   const lngs = all.map((p) => p.lng);
   let minLat = Math.min(...lats);
   let maxLat = Math.max(...lats);
   let minLng = Math.min(...lngs);
   let maxLng = Math.max(...lngs);
-  // Prevent collapse when all points are nearly identical (path would be invisible)
+  if (!Number.isFinite(minLat) || !Number.isFinite(maxLng)) {
+    return { pathD: '', lineCoords: [], singlePointCoord: null };
+  }
   const rangeLat = Math.max(maxLat - minLat, 5e-5);
   const rangeLng = Math.max(maxLng - minLng, 5e-5);
   const padLat = (rangeLat - (maxLat - minLat)) / 2;
@@ -53,13 +66,22 @@ function project(
   const innerW = width - 2 * pad;
   const innerH = height - 2 * pad;
   const scale = Math.min(innerW / rangeLng, innerH / rangeLat);
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
 
-  const toX = (lng: number) => pad + (lng - minLng) * scale;
-  const toY = (lat: number) => height - pad - (lat - minLat) * scale;
+  const toX = (lng: number) => pad + (lng - minLng) * safeScale;
+  const toY = (lat: number) => height - pad - (lat - minLat) * safeScale;
 
-  const pathD = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.lng)} ${toY(p.lat)}`)
-    .join(' ');
+  const pathD =
+    points.length >= 2
+      ? points
+          .map((p, i) => {
+            const x = toX(p.lng);
+            const y = toY(p.lat);
+            return Number.isFinite(x) && Number.isFinite(y) ? `${i === 0 ? 'M' : 'L'} ${x} ${y}` : null;
+          })
+          .filter(Boolean)
+          .join(' ')
+      : '';
 
   const lineCoords = lines.map(([a, b]) => ({
     x1: toX(a.lng),
@@ -68,7 +90,20 @@ function project(
     y2: toY(b.lat),
   }));
 
-  return { pathD, lineCoords };
+  const singlePointCoord =
+    points.length === 1
+      ? (() => {
+          const x = toX(points[0].lng);
+          const y = toY(points[0].lat);
+          return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+        })()
+      : null;
+
+  return {
+    pathD,
+    lineCoords,
+    singlePointCoord,
+  };
 }
 
 export function TrackPreview({
@@ -76,33 +111,32 @@ export function TrackPreview({
   startLine,
   finishLine,
 }: TrackPreviewProps) {
-  const { pathD, lineCoords } = useMemo(() => {
+  const { pathD, lineCoords, singlePointCoord, validPoints } = useMemo(() => {
+    const valid = Array.isArray(points)
+      ? points.map(toPoint).filter((p): p is Point => p != null)
+      : [];
     const lines: Array<[Point, Point]> = [];
     if (startLine) {
-      lines.push(
-        [
-          { lat: startLine.lat1, lng: startLine.lng1 },
-          { lat: startLine.lat2, lng: startLine.lng2 },
-        ],
-      );
+      const a = toPoint({ lat: startLine.lat1, lng: startLine.lng1 });
+      const b = toPoint({ lat: startLine.lat2, lng: startLine.lng2 });
+      if (a && b) lines.push([a, b]);
     }
     if (finishLine) {
-      lines.push(
-        [
-          { lat: finishLine.lat1, lng: finishLine.lng1 },
-          { lat: finishLine.lat2, lng: finishLine.lng2 },
-        ],
-      );
+      const a = toPoint({ lat: finishLine.lat1, lng: finishLine.lng1 });
+      const b = toPoint({ lat: finishLine.lat2, lng: finishLine.lng2 });
+      if (a && b) lines.push([a, b]);
     }
-    return project(points, lines, WIDTH, HEIGHT, PAD);
+    const proj = project(valid, lines, WIDTH, HEIGHT, PAD);
+    return { ...proj, validPoints: valid };
   }, [points, startLine, finishLine]);
 
-  if (points.length < 2) return null;
-
-  const startCoord = startLine ? lineCoords[0] : null;
+  const startCoord = startLine && lineCoords.length > 0 ? lineCoords[0] : null;
   const finishCoord = finishLine
     ? lineCoords[startLine ? 1 : 0]
     : null;
+
+  const hasTrack = pathD.length > 0 || singlePointCoord != null;
+  if (!hasTrack && validPoints.length === 0) return null;
 
   return (
     <View style={styles.wrapper}>
@@ -112,10 +146,12 @@ export function TrackPreview({
             d={pathD}
             fill="none"
             stroke="#6366f1"
-            strokeWidth={2.5}
+            strokeWidth={3}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+        ) : singlePointCoord ? (
+          <Circle cx={singlePointCoord.x} cy={singlePointCoord.y} r={6} fill="#6366f1" />
         ) : null}
         {startCoord && (
           <Line
@@ -124,7 +160,7 @@ export function TrackPreview({
             x2={startCoord.x2}
             y2={startCoord.y2}
             stroke="#4CAF50"
-            strokeWidth="3"
+            strokeWidth={3}
             strokeLinecap="round"
           />
         )}
@@ -135,7 +171,7 @@ export function TrackPreview({
             x2={finishCoord.x2}
             y2={finishCoord.y2}
             stroke="#FF5252"
-            strokeWidth="3"
+            strokeWidth={3}
             strokeLinecap="round"
           />
         )}
